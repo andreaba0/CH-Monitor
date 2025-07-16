@@ -156,14 +156,17 @@ func (fs *FileSystemStorage) GetFullVirtualMachineList() ([]Manifest, error) {
 	return res, nil
 }
 
-type VMStoreManager interface {
+func (fs *FileSystemStorage) CreateManifest(vmId string, manifest Manifest) error {
+	return nil
+}
+
+type FileSystemStorageService interface {
 	CreateDisk(vmId string, fileName string, diskSize int64) error
 	WriteDiskChunk(vmId string, fileName string, byteIndex int64, chunk io.Reader) error
 	CompleteDiskWrite(vmId string, fileName string) error
 	CreateManifest(vmId string, manifest Manifest) error
 	ReadManifest(vmId string) (*Manifest, error)
-	Delete(vmId string) error
-	LoadData(vmId string)
+	//Delete(vmId string) error
 	GetDiskStoragePath(vmId string) string
 	GetFullVirtualMachineList() ([]Manifest, error)
 	CreateVirtualMachine(vmId string, manifest *Manifest) error

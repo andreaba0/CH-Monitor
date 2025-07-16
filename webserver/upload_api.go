@@ -18,7 +18,7 @@ type JsonResponse struct {
 }
 
 type VirtualMachineUpload struct {
-	VmFileSystemStorage *vmstorage.FileSystemStorage
+	VmFileSystemStorage vmstorage.FileSystemStorageService
 }
 
 type VirtualMachineUploadService interface {

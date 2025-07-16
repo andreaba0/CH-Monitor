@@ -22,7 +22,7 @@ func main() {
 	var hypervisorBinary *vmmanager.HypervisorBinary = &vmmanager.HypervisorBinary{
 		BinaryPath: "/bin/cloud-hypervisor-static",
 	}
-	var hypervisorMonitor vmmanager.HypervisorMonitor
+	var hypervisorMonitor *vmmanager.HypervisorMonitor
 	var echoSocket *webserver.EchoSocket = &webserver.EchoSocket{}
 
 	homeDir, err = os.UserHomeDir()
@@ -58,7 +58,7 @@ func main() {
 	hypervisorMonitor.LoadVirtualMachines(runningCHInstances, vmList)
 
 	// Run webserver and start listening for incoming requests
-	webserver.Run(vmFileSystemStorage, echoSocket)
+	webserver.Run(*vmFileSystemStorage, hypervisorMonitor, echoSocket)
 
 	os.Exit(0)
 }

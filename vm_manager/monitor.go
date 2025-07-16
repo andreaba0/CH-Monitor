@@ -16,8 +16,8 @@ type HypervisorMonitor struct {
 	fs              vmstorage.FileSystemStorage
 }
 
-func NewHypervisorMonitor(fs vmstorage.FileSystemStorage) HypervisorMonitor {
-	return HypervisorMonitor{
+func NewHypervisorMonitor(fs vmstorage.FileSystemStorage) *HypervisorMonitor {
+	return &HypervisorMonitor{
 		fs: fs,
 	}
 }
@@ -59,5 +59,5 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHIns
 }
 
 type HypervisorMonitorService interface {
-	LoadVirtualMachines([]RunningCHInstance, []vmstorage.Manifest) error
+	LoadVirtualMachines(runningInstances []RunningCHInstance, manifestList []vmstorage.Manifest) error
 }

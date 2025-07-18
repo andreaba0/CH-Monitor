@@ -29,6 +29,21 @@ func (fs *FileSystemStorage) CreateDisk(vmId string, fileName string, diskSize i
 	var fd *os.File
 	var tempFileName string
 	var location string = fs.GetDiskStoragePath(vmId)
+	var manifest *Manifest
+	manifest, err = fs.ReadManifest(vmId)
+	if err != nil {
+		return errors.New("unable to get vm metadata")
+	}
+	var found bool = false
+	for i := 0; i < len(manifest.Disks); i++ {
+		if manifest.Disks[i].Name == fileName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return errors.New("disk name is not listed in vm manifest")
+	}
 
 	tempFileName = fmt.Sprintf("%s.tmp", fileName)
 

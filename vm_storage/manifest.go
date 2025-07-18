@@ -1,9 +1,30 @@
 package vmstorage
 
+import (
+	"net"
+)
+
+type IPNetWrapper struct {
+	net.IPNet
+}
+
+func (ipnet *IPNetWrapper) UnmarhsalText(text []byte) error {
+	var ip net.IP
+	var ipNet *net.IPNet
+	var err error
+	ip, ipNet, err = net.ParseCIDR(string(text))
+	if err != nil {
+		ipnet = nil
+		return nil
+	}
+	ipnet.IP = ip
+	ipnet.Mask = ipNet.Mask
+	return nil
+}
+
 type NetworkInterfaceConfig struct {
-	Ip      string `json:"ip" xml:"ip"`
-	NetMask string `json:"net_mask" xml:"net_mask"`
-	Mac     string `json:"mac" xml:"mac"`
+	Addresses []IPNetWrapper   `json:"addresses" xml:"addresses"`
+	Mac       net.HardwareAddr `json:"mac" xml:"mac"`
 }
 
 type DiskDevice struct {
@@ -16,17 +37,19 @@ type MemoryConfig struct {
 }
 
 type CpuConfig struct {
-	VcpuNumber int    `json:"vcpu" xml:"vcpu"`
-	Limit      string `json:"limit" xml:"limit"` // percentage for each core
+	Count int    `json:"vcpu" xml:"vcpu"`
+	Limit string `json:"limit" xml:"limit"`
 }
 
 type Manifest struct {
 	GuestName         string                   `json:"guest_name" xml:"guest_name"`
-	Networks          []NetworkInterfaceConfig `json:"networks" xml:"networks"`
 	Disks             []DiskDevice             `json:"disks" xml:"disks"`
 	EnableIpSpoofing  bool                     `json:"enable_ip_spoofing" xml:"enable_ip_spoofing"`
 	EnableMacSpoofing bool                     `json:"enable_mac_spoofing" xml:"enable_mac_spoofing"`
 	EnableBroadcast   bool                     `json:"enable_broadcast" xml:"enable_broadcast"`
 	Memory            MemoryConfig             `json:"memory" xml:"memory"`
-	Cpu               CpuConfig                `json:"cpu" xml:"cpu"`
+	Vcpu              CpuConfig                `json:"vcpu" xml:"vcpu"`
+	Tenant            string                   `json:"tenant" xml:"tenant"`
+	DefaultNetwork    NetworkInterfaceConfig   `json:"default_network" xml:"default_network"`
+	PrivateNetworks   []NetworkInterfaceConfig `json:"private_networks" xml:"private_networks"` // VPC
 }

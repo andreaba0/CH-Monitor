@@ -27,9 +27,8 @@ func Run(vmFileSystemStorage vmstorage.FileSystemStorageService, vmmManager vmma
 	e.POST("/api/v1/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit())
 
 	e.GET("/api/vm/info", nil)
-	e.PUT("/api/vm/create", nil)  // Update manifest config
-	e.POST("/api/vm/create", nil) // Create manifest file and folders
-	e.PUT("/api/vm/boot", nil)    // Spin-up cloud-hypervisor instance
+	e.PUT("/api/vm/create", nil)
+	e.PUT("/api/vm/boot", nil)
 	e.PUT("/api/vm/delete", nil)
 
 	e.PUT("/api/vmm/vm.metadata", virtualMachineManagerApi.UpdateVirtualMachine())

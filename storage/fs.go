@@ -24,26 +24,23 @@ func NewFileSystemStorage(path string) (*FileSystemStorage, error) {
 	}, nil
 }
 
+func (fs *FileSystemStorage) GetManifestPath(vmId string) string {
+	return filepath.Join(fs.basePath, vmId, "manifest.json")
+}
+
+func (fs *FileSystemStorage) GetDiskPath(vmId string, diskName string) string {
+	return filepath.Join(fs.basePath, vmId, "disks", diskName)
+}
+
+func (fs *FileSystemStorage) GetSocketPath(vmId string) string {
+	return filepath.Join(fs.basePath, vmId, "cloud-hypervisor-vm.sock")
+}
+
 func (fs *FileSystemStorage) CreateDisk(vmId string, fileName string, diskSize int64) error {
 	var err error
 	var fd *os.File
 	var tempFileName string
 	var location string = fs.GetDiskStoragePath(vmId)
-	var manifest *Manifest
-	manifest, err = fs.ReadManifest(vmId)
-	if err != nil {
-		return errors.New("unable to get vm metadata")
-	}
-	var found bool = false
-	for i := 0; i < len(manifest.Disks); i++ {
-		if manifest.Disks[i].Name == fileName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return errors.New("disk name is not listed in vm manifest")
-	}
 
 	tempFileName = fmt.Sprintf("%s.tmp", fileName)
 
@@ -102,9 +99,9 @@ func (fs *FileSystemStorage) GetDiskStoragePath(vmId string) string {
 
 func (fs *FileSystemStorage) ReadManifest(vmId string) (*Manifest, error) {
 	var err error
-	var manifest *Manifest
+	var manifest *Manifest = &Manifest{}
 	var content []byte
-	content, err = os.ReadFile(filepath.Join(fs.basePath, vmId, "manifest.json"))
+	content, err = os.ReadFile(fs.GetManifestPath(vmId))
 	if err != nil {
 		return nil, err
 	}
@@ -123,31 +120,27 @@ func (fs *FileSystemStorage) CreateVirtualMachine(vmId string, manifest *Manifes
 	if err != nil {
 		return err
 	}
-	err = os.MkdirAll(filepath.Join(fs.basePath, vmId), os.ModePerm)
+	err = os.MkdirAll(fs.GetDiskStoragePath(vmId), os.ModePerm)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(filepath.Join(fs.basePath, vmId, "manifest.json"), content, 0644)
+	err = os.WriteFile(fs.GetManifestPath(vmId), content, 0644)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (fs *FileSystemStorage) GetIdFromSocket(socketPath string) (string, error) {
-	var parts = strings.Split(socketPath, "/")
-	var basePathParts = strings.Split(fs.basePath, "/")
-	var i int
-	if len(parts) != len(basePathParts) || len(parts) == len(basePathParts) || len(parts) != len(basePathParts)+2 {
-		return "", errors.New("socket is expected to be in another folder")
+func (fs *FileSystemStorage) GetVirtualMachineIdFromSocket(socketFilePath string) (string, error) {
+	rel, err := filepath.Rel(fs.basePath, socketFilePath)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return "", errors.New("invalid socket path")
 	}
-	for i = 0; i < len(basePathParts); i++ {
-		if parts[i] != basePathParts[i] {
-			return "", errors.New("socket is expected to be in another folder")
-		}
+	parts := strings.Split(rel, string(os.PathSeparator))
+	if len(parts) < 2 {
+		return "", errors.New("unexpected socket structure")
 	}
-	var vmId = parts[len(parts)-2]
-	return vmId, nil
+	return parts[0], nil
 }
 
 func (fs *FileSystemStorage) GetFullVirtualMachineList() ([]Manifest, error) {
@@ -157,7 +150,7 @@ func (fs *FileSystemStorage) GetFullVirtualMachineList() ([]Manifest, error) {
 		return []Manifest{}, errors.New("unable to read from folder")
 	}
 	for i := 0; i < len(folders); i++ {
-		content, err := os.ReadFile(filepath.Join(fs.basePath, folders[i].Name(), "manifest.json"))
+		content, err := os.ReadFile(fs.GetManifestPath(folders[i].Name()))
 		if err != nil {
 			continue
 		}
@@ -169,21 +162,4 @@ func (fs *FileSystemStorage) GetFullVirtualMachineList() ([]Manifest, error) {
 		res = append(res, manifest)
 	}
 	return res, nil
-}
-
-func (fs *FileSystemStorage) CreateManifest(vmId string, manifest Manifest) error {
-	return nil
-}
-
-type FileSystemStorageService interface {
-	CreateDisk(vmId string, fileName string, diskSize int64) error
-	WriteDiskChunk(vmId string, fileName string, byteIndex int64, chunk io.Reader) error
-	CompleteDiskWrite(vmId string, fileName string) error
-	CreateManifest(vmId string, manifest Manifest) error
-	ReadManifest(vmId string) (*Manifest, error)
-	//Delete(vmId string) error
-	GetDiskStoragePath(vmId string) string
-	GetFullVirtualMachineList() ([]Manifest, error)
-	CreateVirtualMachine(vmId string, manifest *Manifest) error
-	GetIdFromSocket(socketPath string) (string, error)
 }

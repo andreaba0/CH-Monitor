@@ -2,13 +2,14 @@ package vmnetworking
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 
 	"github.com/vishvananda/netlink"
 )
 
-type VirtualMachineNetworkingManager struct {
+type VirtualMachineNetworkUtility struct {
 	bridgeDefaultName string
 }
 
@@ -16,147 +17,127 @@ type NamingConvention struct {
 	Prefix     string
 	ObjectName string
 	Ip         net.IP
+	Mask       net.IPMask
 }
 
-func (nc *NamingConvention) Parse(name string) error {
-	if nc == nil {
-		return errors.New("uninitialized struct")
-	}
+func ParseDeviceName(name string) (*NamingConvention, error) {
 	var parts []string = strings.Split(name, "-")
-	if len(parts) < 6 {
-		nc = nil
-		return errors.New("wrong naming convention: format")
+	if len(parts) < 7 {
+		return nil, errors.New("wrong naming convention: format")
 	}
-	nc.Prefix = parts[0]
-	var strIp string = strings.Join([]string{parts[len(parts)-4], parts[len(parts)-3], parts[len(parts)-2], parts[len(parts)-1]}, ".")
-	var ip net.IP = net.ParseIP(strIp)
-	if ip == nil {
-		nc = nil
-		return errors.New("wrong naming convention: ip")
+	var strMask = parts[len(parts)-1]
+	var strIp string = strings.Join([]string{parts[len(parts)-5], parts[len(parts)-4], parts[len(parts)-3], parts[len(parts)-2]}, ".")
+	ip, ipNet, err := net.ParseCIDR(fmt.Sprintf("%s/%s", strIp, strMask))
+	if err != nil {
+		return nil, errors.New("wrong naming convention: ip")
 	}
-	nc.Ip = ip
-	nc.ObjectName = strings.Join(parts[1:len(parts)-4], "-")
-	return nil
+
+	var nc *NamingConvention = &NamingConvention{
+		Prefix:     parts[0],
+		Ip:         ip.To4(),
+		Mask:       (*ipNet).Mask,
+		ObjectName: strings.Join(parts[1:len(parts)-5], "-"),
+	}
+	return nc, nil
 }
 
-func (nc *NamingConvention) Compare(value string) bool {
+func (nc *NamingConvention) Is(value string) bool {
 	if nc == nil {
 		return false
 	}
-	if nc.Prefix == value {
-		return true
-	}
-	return false
+	return nc.Prefix == value
 }
 
 func (nc *NamingConvention) IsVpcBridge() bool {
-	return nc.Compare("chbrvpc")
+	return nc.Is("chbrvpc")
 }
 
 func (nc *NamingConvention) IsDefaultBridge() bool {
-	return nc.Compare("chbrdef")
+	return nc.Is("chbrdef")
 }
 
 func (nc *NamingConvention) IsVirtualMachineTap() bool {
-	return nc.Compare("chtap")
+	return nc.Is("chtap")
 }
 
-func NewVirtualMachineNetworkingManager(bridgeName string) *VirtualMachineNetworkingManager {
-	return &VirtualMachineNetworkingManager{
+func NewVirtualMachineNetworkUtility(bridgeName string) *VirtualMachineNetworkUtility {
+	return &VirtualMachineNetworkUtility{
 		bridgeDefaultName: bridgeName,
 	}
 }
 
-func (nm *VirtualMachineNetworkingManager) GetTapDevices(vmId string) ([]netlink.Link, error) {
-	var netDevices []netlink.Link
-	var err error
-	var nc *NamingConvention = &NamingConvention{}
-	var res []netlink.Link = []netlink.Link{}
-	netDevices, err = nm.GetAllTapDevices()
+func filterLinksBy(fn func(netlink.Link) bool) ([]netlink.Link, error) {
+	all, err := netlink.LinkList()
 	if err != nil {
-		return []netlink.Link{}, err
+		return nil, err
 	}
-	for i := 0; i < len(netDevices); i++ {
-		err = nc.Parse(netDevices[i].Attrs().Name)
-		if err != nil {
-			continue
-		}
-		if nc.ObjectName == vmId {
-			res = append(res, netDevices[i])
+	var res []netlink.Link
+	for _, link := range all {
+		if fn(link) {
+			res = append(res, link)
 		}
 	}
-
 	return res, nil
 }
 
-func (nm *VirtualMachineNetworkingManager) GetAllTapDevices() ([]netlink.Link, error) {
-	var links []netlink.Link
-	var err error
-	var nc *NamingConvention = &NamingConvention{}
-	var res []netlink.Link = []netlink.Link{}
-	links, err = netlink.LinkList()
-	if err != nil {
-		return []netlink.Link{}, err
-	}
-	for i := 0; i < len(links); i++ {
-		tuntap, ok := links[i].(*netlink.Tuntap)
+func (nm *VirtualMachineNetworkUtility) GetTapDevices(vmId string) ([]netlink.Link, error) {
+	return filterLinksBy(func(link netlink.Link) bool {
+		tuntap, ok := link.(*netlink.Tuntap)
 		if !ok || tuntap.Mode != netlink.TUNTAP_MODE_TAP {
-			continue
+			return false
 		}
-		err = nc.Parse(netlink.NewLinkAttrs().Name)
+		nc, err := ParseDeviceName(link.Attrs().Name)
 		if err != nil {
-			continue
+			return false
 		}
 		if !nc.IsVirtualMachineTap() {
-			continue
+			return false
 		}
-		if links[i].Attrs().MasterIndex == 0 {
-			continue
+		return nc.ObjectName == vmId
+	})
+}
+
+func (nm *VirtualMachineNetworkUtility) GetAllTapDevices() ([]netlink.Link, error) {
+	return filterLinksBy(func(link netlink.Link) bool {
+		tuntap, ok := link.(*netlink.Tuntap)
+		if !ok || tuntap.Mode != netlink.TUNTAP_MODE_TAP {
+			return false
 		}
-		master, err := netlink.LinkByIndex(links[i].Attrs().MasterIndex)
+		nc, err := ParseDeviceName(link.Attrs().Name)
 		if err != nil {
-			continue
+			return false
 		}
-		err = nc.Parse(master.Attrs().Name)
+		if !nc.IsVirtualMachineTap() {
+			return false
+		}
+		if link.Attrs().MasterIndex == 0 {
+			return false
+		}
+		master, err := netlink.LinkByIndex(link.Attrs().MasterIndex)
 		if err != nil {
-			continue
+			return false
+		}
+		nc, err = ParseDeviceName(master.Attrs().Name)
+		if err != nil {
+			return false
 		}
 		if !(nc.IsDefaultBridge() || nc.IsVpcBridge()) {
-			continue
+			return false
 		}
-		res = append(res, links[i])
-	}
-	return res, nil
+		return true
+	})
 }
 
-func (nm *VirtualMachineNetworkingManager) GetAllVpcBridgeDevices() ([]netlink.Link, error) {
-	var links []netlink.Link
-	var err error
-	var nc *NamingConvention = &NamingConvention{}
-	var res []netlink.Link = []netlink.Link{}
-	links, err = netlink.LinkList()
-	if err != nil {
-		return []netlink.Link{}, err
-	}
-	for i := 0; i < len(links); i++ {
-		_, ok := links[i].(*netlink.Bridge)
+func (nm *VirtualMachineNetworkUtility) GetAllVpcBridgeDevices() ([]netlink.Link, error) {
+	return filterLinksBy(func(link netlink.Link) bool {
+		_, ok := link.(*netlink.Bridge)
 		if !ok {
-			continue
+			return false
 		}
-		err = nc.Parse(netlink.NewLinkAttrs().Name)
+		nc, err := ParseDeviceName(link.Attrs().Name)
 		if err != nil {
-			continue
+			return false
 		}
-		if !nc.IsVpcBridge() {
-			continue
-		}
-		res = append(res, links[i])
-	}
-	return res, nil
-}
-
-type VirtualMachineNetworkingManagerService interface {
-	GetTapDevices(vmId string) ([]netlink.Link, error)
-	GetAllTapDevices() ([]netlink.Link, error)
-	GetAllVpcBridgeDevices() ([]netlink.Link, error)
+		return nc.IsVpcBridge()
+	})
 }

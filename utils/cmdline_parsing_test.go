@@ -8,11 +8,10 @@ import (
 
 func Test_CmdLineParsing_Parse(t *testing.T) {
 	var command = "/bin/cloud-hypervisor-static --api-socket path=/tmp/cloud-hypervisor/46c97539-797a-4cf6-b4b6-31f9909d9401.sock"
-	var cmdLineParsing *CmdLineParsing = NewCmdLineParsing()
-	err := cmdLineParsing.Parse(command)
+	cmdLine, err := ParseCmdLine(command)
 	assert.Nil(t, err, "No errors should be raised")
-	assert.Equal(t, cmdLineParsing.Binary, "/bin/cloud-hypervisor-static")
-	assert.Equal(t, cmdLineParsing.Args["--api-socket"], "path=/tmp/cloud-hypervisor/46c97539-797a-4cf6-b4b6-31f9909d9401.sock")
+	assert.Equal(t, cmdLine.Binary, "/bin/cloud-hypervisor-static")
+	assert.Equal(t, cmdLine.Args["--api-socket"], "path=/tmp/cloud-hypervisor/46c97539-797a-4cf6-b4b6-31f9909d9401.sock")
 }
 
 func Test_CmdSocketParsing_Parse(t *testing.T) {

@@ -1,14 +1,14 @@
 package webserver
 
 import (
-	vmmanager "vmm/vm_manager"
-	vmstorage "vmm/vm_storage"
+	vmmanager "vmm/manager"
+	vmstorage "vmm/storage"
 
 	"github.com/labstack/echo/v4"
 )
 
 type VirtualMachineManagerApi struct {
-	fs  vmstorage.FileSystemStorageService
+	fs  *vmstorage.FileSystemStorage
 	vmm vmmanager.HypervisorMonitorService
 }
 

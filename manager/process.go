@@ -43,8 +43,7 @@ func parseProcFolder(cloudHypervisorPath string, pid int, procPath string, done 
 
 	var cmdLine = strings.Join(strings.Split(string(contentCmd), "\000"), " ")
 
-	var cmdLineParsing *utils.CmdLineParsing = utils.NewCmdLineParsing()
-	err = cmdLineParsing.Parse(cmdLine)
+	cmdLineParsing, err := utils.ParseCmdLine(cmdLine)
 	if err != nil {
 		done <- nil
 		return
@@ -116,14 +115,14 @@ func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]RunningCHInstance, e
 			continue
 		}
 		// Process chan return
-		for i = 0; i < poolIndex; i++ {
+		if poolIndex == 20 {
 			chInstance = <-procs
+			poolIndex -= 1
 			if chInstance == nil {
 				continue
 			}
 			procList = append(procList, *chInstance)
 		}
-		poolIndex = 0
 	}
 
 	for i = 0; i < poolIndex; i++ {

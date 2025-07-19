@@ -1,6 +1,6 @@
 package vmmanager
 
-import vmstorage "vmm/vm_storage"
+import vmstorage "vmm/storage"
 
 type VMConfig struct {
 	RootfsName    string
@@ -37,7 +37,7 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHIns
 	for i = 0; i < len(runningInstances); i++ {
 		var instance RunningCHInstance = runningInstances[i]
 		var vmId string
-		vmId, err = hm.fs.GetIdFromSocket(instance.UnixSocketPath)
+		vmId, err = hm.fs.GetVirtualMachineIdFromSocket(instance.UnixSocketPath)
 		if err != nil {
 			continue
 		}

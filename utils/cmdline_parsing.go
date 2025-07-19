@@ -19,31 +19,35 @@ func NewCmdLineParsing() *CmdLineParsing {
 	}
 }
 
-func (current *CmdLineParsing) Parse(command string) error {
+func ParseCmdLine(command string) (*CmdLineParsing, error) {
+	var cmdLine *CmdLineParsing = &CmdLineParsing{
+		Binary: "",
+		Args:   make(map[string]interface{}),
+	}
 	args, err := shlex.Split(command)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for i := 0; i < len(args); i++ {
 		if i == 0 {
-			current.Binary = args[0]
+			cmdLine.Binary = args[0]
 			continue
 		}
 		if args[i][:2] == "--" && i == len(args)-1 {
-			current.Args[args[i]] = true
+			cmdLine.Args[args[i]] = true
 			continue
 		}
 		if args[i][:2] != "--" {
-			return errors.New("expected a flag")
+			return nil, errors.New("expected a flag")
 		}
 		if args[i][:2] == "--" && args[i+1][:2] == "--" {
-			current.Args[args[i]] = true
+			cmdLine.Args[args[i]] = true
 			continue
 		}
-		current.Args[args[i]] = args[i+1]
+		cmdLine.Args[args[i]] = args[i+1]
 		i += 1
 	}
-	return nil
+	return cmdLine, nil
 }
 
 type CmdSocketParsing struct {

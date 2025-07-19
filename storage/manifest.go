@@ -8,14 +8,13 @@ type IPNetWrapper struct {
 	net.IPNet
 }
 
-func (ipnet *IPNetWrapper) UnmarhsalText(text []byte) error {
+func (ipnet *IPNetWrapper) UnmarshalText(text []byte) error {
 	var ip net.IP
 	var ipNet *net.IPNet
 	var err error
 	ip, ipNet, err = net.ParseCIDR(string(text))
 	if err != nil {
-		ipnet = nil
-		return nil
+		return err
 	}
 	ipnet.IP = ip
 	ipnet.Mask = ipNet.Mask

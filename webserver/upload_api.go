@@ -3,7 +3,7 @@ package webserver
 import (
 	"fmt"
 	"net/http"
-	vmstorage "vmm/vm_storage"
+	vmstorage "vmm/storage"
 
 	"github.com/labstack/echo/v4"
 )
@@ -18,7 +18,7 @@ type JsonResponse struct {
 }
 
 type VirtualMachineUpload struct {
-	VmFileSystemStorage vmstorage.FileSystemStorageService
+	VmFileSystemStorage *vmstorage.FileSystemStorage
 }
 
 type VirtualMachineUploadService interface {

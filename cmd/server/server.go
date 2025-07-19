@@ -5,8 +5,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	vmmanager "vmm/vm_manager"
-	vmstorage "vmm/vm_storage"
+	vmmanager "vmm/manager"
+	vmstorage "vmm/storage"
 	"vmm/webserver"
 )
 

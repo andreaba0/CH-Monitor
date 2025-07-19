@@ -1,6 +1,6 @@
 package vmmanager
 
-import vmstorage "vmm/vm_storage"
+import vmstorage "vmm/storage"
 
 type VirtualMachineState int
 

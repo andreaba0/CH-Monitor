@@ -8,6 +8,8 @@ import (
 	vmmanager "vmm/manager"
 	vmstorage "vmm/storage"
 	"vmm/webserver"
+
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -16,6 +18,8 @@ func main() {
 	var basePath = ""
 	var vmFileSystemStorage *vmstorage.FileSystemStorage
 	var runningCHInstances []vmmanager.RunningCHInstance
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
 	var hypervisorBinary *vmmanager.HypervisorBinary = &vmmanager.HypervisorBinary{
 		BinaryPath: "/bin/cloud-hypervisor-static",
 	}
@@ -52,7 +56,7 @@ func main() {
 	}
 
 	// Initialize the VMM
-	hypervisorMonitor = vmmanager.NewHypervisorMonitor(*vmFileSystemStorage)
+	hypervisorMonitor = vmmanager.NewHypervisorMonitor(*vmFileSystemStorage, logger)
 
 	vmList, err := vmFileSystemStorage.GetFullVirtualMachineList()
 	if err != nil {

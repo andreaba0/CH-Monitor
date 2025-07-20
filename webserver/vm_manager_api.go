@@ -9,7 +9,7 @@ import (
 
 type VirtualMachineManagerApi struct {
 	fs  *vmstorage.FileSystemStorage
-	vmm vmmanager.HypervisorMonitorService
+	vmm *vmmanager.HypervisorMonitor
 }
 
 func (vmmApi *VirtualMachineManagerApi) CreateVirtualMachine() echo.HandlerFunc {

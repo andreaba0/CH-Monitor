@@ -12,7 +12,7 @@ type EchoSocket struct {
 	Port string
 }
 
-func Run(vmFileSystemStorage *vmstorage.FileSystemStorage, vmmManager vmmanager.HypervisorMonitorService, echoSocket *EchoSocket) {
+func Run(vmFileSystemStorage *vmstorage.FileSystemStorage, vmmManager *vmmanager.HypervisorMonitor, echoSocket *EchoSocket) {
 	var e *echo.Echo = echo.New()
 	var virtualMachineUpload *VirtualMachineUpload = &VirtualMachineUpload{
 		VmFileSystemStorage: vmFileSystemStorage,

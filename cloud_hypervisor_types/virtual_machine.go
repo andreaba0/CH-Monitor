@@ -1,0 +1,42 @@
+package cloudhypervisortypes
+
+type VirtualMachineCreate struct {
+	Cpus    VmCpus  `json:"cpus" yaml:"cpus"`
+	Payload Payload `json:"payload" yaml:"payload"`
+	Disks   []Disks `json:"disks" yaml:"disks"`
+	Rng     Rng     `json:"rng" yaml:"rng"`
+	Net     Net     `json:"net" yaml:"net"`
+	Serial  Serial  `json:"serial" yaml:"serial"`
+	Console Console `json:"console" yaml:"console"`
+}
+
+type VmCpus struct {
+	Boot_vcpus int `json:"boot_vcpus" yaml:"boot_vcpus"`
+	Max_vcpus  int `json:"max_vpcus" yaml:"max_vcpus"`
+}
+
+type Payload struct {
+	Kernel  string `json:"kernel" yaml:"kernel"`
+	Cmdline string `json:"cmdline" yaml:"cmdline"`
+}
+
+type Disks struct {
+	Path string `json:"path" yaml:"path"`
+}
+
+type Rng struct {
+	Src string `json:"src" yaml:"src"`
+}
+
+type Net struct {
+	Mac string `json:"mac" yaml:"mac"`
+	Tap string `json:"tap" yaml:"tap"`
+}
+
+type Serial struct {
+	Mode string `json:"mode" yaml:"mode"`
+}
+
+type Console struct {
+	Mode string `json:"mode" yaml:"mode"`
+}

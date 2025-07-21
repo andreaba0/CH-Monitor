@@ -10,23 +10,25 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-func CreateTapInterface(vmId string, networkAddress net.IP, master netlink.Link) error {
+func CreateTapInterface(vmId string, networkAddress net.IP, networkMask net.IPMask, master netlink.Link) error {
 	var ipv4 net.IP = networkAddress.To4()
 	var err error
 	if ipv4 == nil {
 		return errors.New("invalid ip address")
 	}
+	ones, _ := networkMask.Size()
 	var tap netlink.Tuntap = netlink.Tuntap{
 		Mode:       netlink.TUNTAP_MODE_TAP,
 		NonPersist: false,
 		LinkAttrs: netlink.LinkAttrs{
 			Name: fmt.Sprintf(
-				"chtap-%s-%s-%s-%s-%s",
+				"chtap-%s-%s-%s-%s-%s-%s",
 				strings.ToLower(vmId),
 				strconv.Itoa(int(ipv4[0])),
 				strconv.Itoa(int(ipv4[1])),
 				strconv.Itoa(int(ipv4[2])),
 				strconv.Itoa(int(ipv4[3])),
+				strconv.Itoa(ones),
 			),
 			MasterIndex: master.Attrs().Index,
 		},
@@ -38,25 +40,27 @@ func CreateTapInterface(vmId string, networkAddress net.IP, master netlink.Link)
 	return nil
 }
 
-func CreateBridgeInterface(placeholder string, networkAddress net.IP, master *netlink.Link) error {
+func CreateBridgeInterface(placeholder string, networkAddress net.IP, networkMask net.IPMask, master *netlink.Link) error {
 	var ipv4 net.IP = networkAddress.To4()
 	var index int = 0
 	var err error
 	if ipv4 == nil {
 		return errors.New("invalid ip address")
 	}
+	ones, _ := networkMask.Size()
 	if master != nil {
 		index = (*master).Attrs().Index
 	}
 	var bridge netlink.Bridge = netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
 			Name: fmt.Sprintf(
-				"chtap-%s-%s-%s-%s-%s",
+				"chtap-%s-%s-%s-%s-%s-%s",
 				strings.ToLower(placeholder),
 				strconv.Itoa(int(ipv4[0])),
 				strconv.Itoa(int(ipv4[1])),
 				strconv.Itoa(int(ipv4[2])),
 				strconv.Itoa(int(ipv4[3])),
+				strconv.Itoa(ones),
 			),
 			MasterIndex: index,
 		},

@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/vishvananda/netlink"
 )
 
 type VirtualMachineNetworkUtility struct {
-	bridgeDefaultName string
+	defaultBridgeNetwork net.IPNet
 }
 
 type NamingConvention struct {
@@ -18,6 +19,18 @@ type NamingConvention struct {
 	ObjectName string
 	Ip         net.IP
 	Mask       net.IPMask
+}
+
+type NetworkIdentifier struct {
+	Ip     net.IP
+	Mask   net.IPMask
+	Tenant string
+}
+
+type NetworkDeviceNameGeneration struct {
+	Bridge *string
+	Tap    *string
+	VxLan  *string
 }
 
 func ParseDeviceName(name string) (*NamingConvention, error) {
@@ -41,6 +54,55 @@ func ParseDeviceName(name string) (*NamingConvention, error) {
 	return nc, nil
 }
 
+func ParseIp4ToNetDeviceString(ip net.IP, mask net.IPMask) string {
+	ones, _ := mask.Size()
+	var parts []string = []string{}
+	parts = append(parts, string(ip[0]))
+	parts = append(parts, string(ip[1]))
+	parts = append(parts, string(ip[2]))
+	parts = append(parts, string(ip[3]))
+	parts = append(parts, strconv.Itoa(ones))
+	return strings.Join(parts, "-")
+}
+
+func (vmn *VirtualMachineNetworkUtility) GenereateDeviceName(ni *NetworkIdentifier) (*NetworkDeviceNameGeneration, error) {
+	ones1, bits1 := vmn.defaultBridgeNetwork.Mask.Size()
+	ones2, bits2 := ni.Mask.Size()
+	if ones1 == ones2 && bits1 == bits2 && vmn.defaultBridgeNetwork.Contains(ni.Ip) {
+		// IP is inside the default host network
+		var bridge []string = []string{}
+		bridge = append(bridge, "chbrdef")
+		bridge = append(bridge, ParseIp4ToNetDeviceString(vmn.defaultBridgeNetwork.IP, ni.Mask))
+		var bridgeStr string = strings.Join(bridge, "-")
+		var tap []string = []string{}
+		tap = append(tap, "chtap")
+		tap = append(tap, ni.Tenant)
+		tap = append(tap, ParseIp4ToNetDeviceString(ni.Ip, ni.Mask))
+		var tapStr string = strings.Join(tap, "-")
+		return &NetworkDeviceNameGeneration{
+			Bridge: &bridgeStr,
+			Tap:    &tapStr,
+			VxLan:  nil,
+		}, nil
+	}
+	var bridge []string = []string{}
+	var networkIp = ni.Ip.To4().Mask(ni.Mask)
+	bridge = append(bridge, "chbrvpc")
+	bridge = append(bridge, ni.Tenant)
+	bridge = append(bridge, ParseIp4ToNetDeviceString(networkIp, ni.Mask))
+	var bridgeStr string = strings.Join(bridge, "-")
+	var tap []string = []string{}
+	tap = append(tap, "chtap")
+	tap = append(tap, ni.Tenant)
+	tap = append(tap, ParseIp4ToNetDeviceString(ni.Ip, ni.Mask))
+	var tapStr string = strings.Join(tap, "-")
+	return &NetworkDeviceNameGeneration{
+		Bridge: &bridgeStr,
+		Tap:    &tapStr,
+		VxLan:  nil,
+	}, nil
+}
+
 func (nc *NamingConvention) Is(value string) bool {
 	if nc == nil {
 		return false
@@ -60,10 +122,14 @@ func (nc *NamingConvention) IsVirtualMachineTap() bool {
 	return nc.Is("chtap")
 }
 
-func NewVirtualMachineNetworkUtility(bridgeName string) *VirtualMachineNetworkUtility {
-	return &VirtualMachineNetworkUtility{
-		bridgeDefaultName: bridgeName,
+func NewVirtualMachineNetworkUtility(defaultBridgeNetwork string) (*VirtualMachineNetworkUtility, error) {
+	_, ipNet, err := net.ParseCIDR(defaultBridgeNetwork)
+	if err != nil {
+		return nil, err
 	}
+	return &VirtualMachineNetworkUtility{
+		defaultBridgeNetwork: *ipNet,
+	}, nil
 }
 
 func filterLinksBy(fn func(netlink.Link) bool) ([]netlink.Link, error) {
@@ -140,4 +206,17 @@ func (nm *VirtualMachineNetworkUtility) GetAllVpcBridgeDevices() ([]netlink.Link
 		}
 		return nc.IsVpcBridge()
 	})
+}
+
+func (nm *VirtualMachineNetworkUtility) GetDefaultBridge() (netlink.Link, error) {
+	var bridge []string = []string{}
+	bridge = append(bridge, "chbrdef")
+	bridge = append(bridge, ParseIp4ToNetDeviceString(nm.defaultBridgeNetwork.IP, nm.defaultBridgeNetwork.Mask))
+	var bridgeStr = strings.Join(bridge, "-")
+
+	link, err := netlink.LinkByName(bridgeStr)
+	if err != nil {
+		return nil, err
+	}
+	return link, nil
 }

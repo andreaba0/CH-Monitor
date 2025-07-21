@@ -3,7 +3,6 @@ package webserver
 import (
 	"fmt"
 	vmmanager "vmm/manager"
-	vmstorage "vmm/storage"
 
 	"github.com/labstack/echo/v4"
 )
@@ -12,7 +11,7 @@ type EchoSocket struct {
 	Port string
 }
 
-func Run(vmFileSystemStorage *vmstorage.FileSystemStorage, vmmManager *vmmanager.HypervisorMonitor, echoSocket *EchoSocket) {
+func Run(vmFileSystemStorage *vmmanager.FileSystemWrapper, vmmManager *vmmanager.HypervisorMonitor, echoSocket *EchoSocket) {
 	var e *echo.Echo = echo.New()
 	var virtualMachineUpload *VirtualMachineUpload = &VirtualMachineUpload{
 		VmFileSystemStorage: vmFileSystemStorage,
@@ -22,7 +21,6 @@ func Run(vmFileSystemStorage *vmstorage.FileSystemStorage, vmmManager *vmmanager
 		vmm: vmmManager,
 	}
 
-	e.POST("/api/v1/disk/upload/:filename/begin", virtualMachineUpload.UploadBegin())
 	e.PUT("/api/v1/disk/upload/:filename/chunk", virtualMachineUpload.UploadChunk())
 	e.POST("/api/v1/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit())
 

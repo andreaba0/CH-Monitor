@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	vmmanager "vmm/manager"
-	vmstorage "vmm/storage"
 	"vmm/webserver"
 
 	"go.uber.org/zap"
@@ -16,13 +15,15 @@ func main() {
 	var err error
 	var homeDir string
 	var basePath = ""
-	var vmFileSystemStorage *vmstorage.FileSystemStorage
+	var vmFileSystemStorage *vmmanager.FileSystemWrapper
 	var runningCHInstances []vmmanager.RunningCHInstance
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 	var hypervisorBinary *vmmanager.HypervisorBinary = &vmmanager.HypervisorBinary{
 		BinaryPath: "/bin/cloud-hypervisor-static",
+		RemoteUri:  "http://localhost",
 	}
+	var defaultNetwork string = "192.168.0.0/24"
 	var hypervisorMonitor *vmmanager.HypervisorMonitor
 	var echoSocket *webserver.EchoSocket = &webserver.EchoSocket{}
 
@@ -35,6 +36,7 @@ func main() {
 
 	flag.StringVar(&basePath, "storage_path", basePath, "Path to folder where vms disk rootfs are stored")
 	flag.StringVar(&echoSocket.Port, "port", "80", "Webserver listening port")
+	flag.StringVar(&defaultNetwork, "default_network", defaultNetwork, "Default network to attach guest vms to")
 
 	flag.Parse()
 
@@ -46,19 +48,19 @@ func main() {
 	// Load the list of all active CH processes on the system
 	runningCHInstances, err = vmmanager.LoadProcessData(hypervisorBinary)
 	if err != nil {
-		log.Fatal("unable to load process data")
+		logger.Fatal("Unable to load processes data")
 	}
 
 	// Create an object that is the only one authorized to interact with the filesystem
-	vmFileSystemStorage, err = vmstorage.NewFileSystemStorage(basePath)
+	vmFileSystemStorage, err = vmmanager.NewFileSystemWrapper(basePath, logger)
 	if err != nil {
 		log.Fatal("unable to load file system storage")
 	}
 
 	// Initialize the VMM
-	hypervisorMonitor = vmmanager.NewHypervisorMonitor(*vmFileSystemStorage, logger)
+	hypervisorMonitor = vmmanager.NewHypervisorMonitor(vmFileSystemStorage, logger)
 
-	vmList, err := vmFileSystemStorage.GetFullVirtualMachineList()
+	vmList, err := vmFileSystemStorage.GetVirtualMachineList()
 	if err != nil {
 		log.Fatal("Unable to query vm list")
 	}

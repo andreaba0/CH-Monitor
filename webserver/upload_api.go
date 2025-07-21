@@ -3,6 +3,7 @@ package webserver
 import (
 	"fmt"
 	"net/http"
+	vmmanager "vmm/manager"
 	vmstorage "vmm/storage"
 
 	"github.com/labstack/echo/v4"
@@ -18,7 +19,7 @@ type JsonResponse struct {
 }
 
 type VirtualMachineUpload struct {
-	VmFileSystemStorage *vmstorage.FileSystemStorage
+	VmFileSystemStorage *vmmanager.FileSystemWrapper
 }
 
 type VirtualMachineUploadService interface {
@@ -34,23 +35,6 @@ func (vmStorage *VirtualMachineUpload) CreateVirtualMachine() echo.HandlerFunc {
 	}
 }
 
-func (vmStorage *VirtualMachineUpload) UploadBegin() echo.HandlerFunc {
-	return func(c echo.Context) error {
-		fileMetadata := new(DiskMetadata)
-		var vmName string = c.Param("filename")
-		var err error
-		if err = c.Bind(fileMetadata); err != nil {
-			return c.String(http.StatusBadRequest, "Provided request body does not fulfill requirements")
-		}
-		err = vmStorage.VmFileSystemStorage.CreateDisk(vmName, fileMetadata.VirtualMachine, fileMetadata.ByteSize)
-		if err != nil {
-			return c.JSON(http.StatusInsufficientStorage, JsonResponse{Message: "Unable to allocate enough space for file"})
-		}
-
-		return c.JSON(http.StatusOK, JsonResponse{Message: "BEGIN UPLOAD"})
-	}
-}
-
 func (vmStorage *VirtualMachineUpload) UploadCommit() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		fileMetadata := new(DiskMetadata)
@@ -59,7 +43,9 @@ func (vmStorage *VirtualMachineUpload) UploadCommit() echo.HandlerFunc {
 			return c.String(http.StatusBadRequest, "Provided request body does not fulfill requirements")
 		}
 		var filename = c.Param("filename")
-		err = vmStorage.VmFileSystemStorage.CompleteDiskWrite(fileMetadata.VirtualMachine, filename)
+		var oldPath string = fmt.Sprintf("%s.tmp", vmStorage.VmFileSystemStorage.GetDiskPath(fileMetadata.VirtualMachine, filename))
+		var newPath string = vmStorage.VmFileSystemStorage.GetDiskPath(fileMetadata.VirtualMachine, filename)
+		err = vmstorage.RenameFile(oldPath, newPath)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, JsonResponse{Message: "Maybe file does not exists"})
 		}
@@ -89,7 +75,7 @@ func (vmStorage *VirtualMachineUpload) UploadChunk() echo.HandlerFunc {
 			return c.JSON(http.StatusBadRequest, JsonResponse{Message: "Maybe Content-Range is in bad format. Required: <unit> <range start>-<range end>/<full size>"})
 		}
 
-		err = vmStorage.VmFileSystemStorage.WriteDiskChunk(virtualMachine, filename, rangeStart, c.Request().Body)
+		err = vmstorage.WriteFileChunk(vmStorage.VmFileSystemStorage.GetDiskPath(virtualMachine, filename), rangeStart, c.Request().Body)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, JsonResponse{Message: "There was an error writing to file"})
 		}

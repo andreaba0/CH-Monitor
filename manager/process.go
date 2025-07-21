@@ -1,6 +1,7 @@
 package vmmanager
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -13,6 +14,18 @@ import (
 type RunningCHInstance struct {
 	UnixSocketPath string
 	PID            int
+}
+
+func (rchi *RunningCHInstance) GetVirtualMachineIdFromSocket(basePath string) (string, error) {
+	rel, err := filepath.Rel(basePath, rchi.UnixSocketPath)
+	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+		return "", errors.New("invalid socket path")
+	}
+	parts := strings.Split(rel, string(os.PathSeparator))
+	if len(parts) < 2 {
+		return "", errors.New("unexpected socket structure")
+	}
+	return parts[0], nil
 }
 
 func parseProcFolder(cloudHypervisorPath string, pid int, procPath string, done chan<- *RunningCHInstance) {

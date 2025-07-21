@@ -1,9 +1,6 @@
 package vmmanager
 
 import (
-	"encoding/json"
-	vmstorage "vmm/storage"
-
 	"go.uber.org/zap"
 )
 
@@ -18,37 +15,31 @@ type VMConfig struct {
 
 type HypervisorMonitor struct {
 	VirtualMachines map[string]VirtualMachine
-	fs              vmstorage.FileSystemStorage
+	fs              *FileSystemWrapper
 	logger          *zap.Logger
 }
 
-func NewHypervisorMonitor(fs vmstorage.FileSystemStorage, logger *zap.Logger) *HypervisorMonitor {
+func NewHypervisorMonitor(fs *FileSystemWrapper, logger *zap.Logger) *HypervisorMonitor {
 	return &HypervisorMonitor{
 		fs:     fs,
 		logger: logger,
 	}
 }
 
-func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHInstance, manifestContentList []vmstorage.FileContent) error {
+func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHInstance, manifestList []*Manifest) error {
 	var i int
 	var err error
-	for i = 0; i < len(manifestContentList); i++ {
-		var manifest *Manifest = &Manifest{}
-		err = json.Unmarshal(manifestContentList[i].Content, manifest)
-		if err != nil {
-			hm.logger.Error("Unable to parse file content. Maybe a corrupted file?", zap.String("path", manifestContentList[i].Path))
-			return err
-		}
-		var vmId = manifest.GuestName
+	for i = 0; i < len(manifestList); i++ {
+		var vmId = manifestList[i].GuestName
 		hm.VirtualMachines[vmId] = VirtualMachine{
 			PID:      nil,
-			Manifest: manifest,
+			Manifest: manifestList[i],
 		}
 	}
 	for i = 0; i < len(runningInstances); i++ {
 		var instance RunningCHInstance = runningInstances[i]
 		var vmId string
-		vmId, err = hm.fs.GetVirtualMachineIdFromSocket(instance.UnixSocketPath)
+		vmId, err = instance.GetVirtualMachineIdFromSocket(hm.fs.basePath)
 		if err != nil {
 			continue
 		}

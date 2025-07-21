@@ -1,72 +1,27 @@
 package vmstorage
 
 import (
-	"errors"
-	"fmt"
+	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 )
 
-type FileContent struct {
-	Path    string
-	Content []byte
-}
-
-type FileSystemStorage struct {
-	basePath string
-}
-
-func NewFileSystemStorage(path string) (*FileSystemStorage, error) {
-	if path == "" {
-		return nil, errors.New("path to vm storage required")
-	}
-
-	return &FileSystemStorage{
-		basePath: path,
-	}, nil
-}
-
-func (fs *FileSystemStorage) GetManifestPath(vmId string) string {
-	return filepath.Join(fs.basePath, vmId, "manifest.json")
-}
-
-func (fs *FileSystemStorage) GetDiskPath(vmId string, diskName string) string {
-	return filepath.Join(fs.basePath, vmId, "disks", diskName)
-}
-
-func (fs *FileSystemStorage) GetSocketPath(vmId string) string {
-	return filepath.Join(fs.basePath, vmId, "cloud-hypervisor-vm.sock")
-}
-
-func (fs *FileSystemStorage) CreateDisk(vmId string, fileName string, diskSize int64) error {
+func CreateFile(path string) error {
 	var err error
 	var fd *os.File
-	var tempFileName string
-	var location string = fs.GetDiskStoragePath(vmId)
 
-	tempFileName = fmt.Sprintf("%s.tmp", fileName)
-
-	fd, err = os.OpenFile(filepath.Join(location, tempFileName), os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.ModePerm)
+	fd, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
-	err = fd.Truncate(diskSize)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
-func (fs *FileSystemStorage) WriteDiskChunk(vmId string, fileName string, byteIndex int64, chunk io.Reader) error {
+func WriteFileChunk(path string, byteIndex int64, chunk io.Reader) error {
 	var err error
 	var fd *os.File
-
-	var fullFilePath = filepath.Join(fs.GetDiskStoragePath(vmId), fmt.Sprintf("%s.tmp", fileName))
-
-	fd, err = os.OpenFile(fullFilePath, os.O_WRONLY, os.ModePerm)
+	fd, err = os.OpenFile(path, os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -84,61 +39,72 @@ func (fs *FileSystemStorage) WriteDiskChunk(vmId string, fileName string, byteIn
 	return nil
 }
 
-func (fs *FileSystemStorage) CompleteDiskWrite(vmId string, fileName string) error {
+func RenameFile(oldPath string, newPath string) error {
+	var err error = os.Rename(oldPath, newPath)
+	return err
+}
+
+func ReadJson[T any](path string) (T, error) {
+	var res T
 	var err error
-	var location string = fs.GetDiskStoragePath(vmId)
-	var oldFilename string = filepath.Join(location, fmt.Sprintf("%s.tmp", fileName))
-	var newFilename string = filepath.Join(location, fileName)
-	err = os.Rename(oldFilename, newFilename)
+	var dataByte []byte = []byte{}
+	dataByte, err = os.ReadFile(path)
+	if err != nil {
+		return res, err
+	}
+	err = json.Unmarshal(dataByte, &res)
+	if err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+func WriteJson[T any](path string, content T) error {
+	var err error
+	var dataByte []byte
+	dataByte, err = json.Marshal(content)
 	if err != nil {
 		return err
 	}
-
-	return nil
+	err = os.WriteFile(path, dataByte, os.ModePerm)
+	return err
 }
 
-func (fs *FileSystemStorage) GetDiskStoragePath(vmId string) string {
-	return filepath.Join(fs.basePath, vmId, "disks")
+func CreateFolderRec(path string) error {
+	var err error = os.MkdirAll(path, os.ModePerm)
+	return err
 }
 
-func (fs *FileSystemStorage) ReadManifest(vmId string) ([]byte, error) {
-	var err error
-	var manifest []byte = []byte{}
-	manifest, err = os.ReadFile(fs.GetManifestPath(vmId))
+type FolderEntry struct {
+	Name     string
+	IsFolder bool
+}
+
+func ListFolder(path string) ([]FolderEntry, error) {
+	var res []FolderEntry = []FolderEntry{}
+	entries, err := os.ReadDir(path)
 	if err != nil {
-		return nil, err
+		return []FolderEntry{}, err
 	}
-	return manifest, nil
+	for _, entry := range entries {
+		if entry.IsDir() {
+			res = append(res, FolderEntry{
+				IsFolder: true,
+				Name:     entry.Name(),
+			})
+		} else {
+			res = append(res, FolderEntry{
+				IsFolder: false,
+				Name:     entry.Name(),
+			})
+		}
+	}
+	return res, nil
 }
 
-func (fs *FileSystemStorage) CreateVirtualMachine(vmId string, manifest []byte) error {
-	var err error
-
-	err = os.MkdirAll(fs.GetDiskStoragePath(vmId), os.ModePerm)
-	if err != nil {
-		return err
-	}
-	err = os.WriteFile(fs.GetManifestPath(vmId), manifest, 0644)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (fs *FileSystemStorage) GetVirtualMachineIdFromSocket(socketFilePath string) (string, error) {
-	rel, err := filepath.Rel(fs.basePath, socketFilePath)
-	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
-		return "", errors.New("invalid socket path")
-	}
-	parts := strings.Split(rel, string(os.PathSeparator))
-	if len(parts) < 2 {
-		return "", errors.New("unexpected socket structure")
-	}
-	return parts[0], nil
-}
-
-func (fs *FileSystemStorage) GetFullVirtualMachineList() ([]FileContent, error) {
-	var res []FileContent
+/*
+func GetFullVirtualMachineList[T any]() ([]T, error) {
+	var res []T
 	folders, err := os.ReadDir(fs.basePath)
 	if err != nil {
 		return []FileContent{}, errors.New("unable to read from folder")
@@ -155,3 +121,4 @@ func (fs *FileSystemStorage) GetFullVirtualMachineList() ([]FileContent, error) 
 	}
 	return res, nil
 }
+*/

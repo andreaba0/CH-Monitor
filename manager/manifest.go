@@ -5,7 +5,8 @@ import (
 )
 
 type IPNetWrapper struct {
-	net.IPNet
+	IPNet *net.IPNet
+	IP    net.IP
 }
 
 func (ipnet *IPNetWrapper) UnmarshalText(text []byte) error {
@@ -17,13 +18,13 @@ func (ipnet *IPNetWrapper) UnmarshalText(text []byte) error {
 		return err
 	}
 	ipnet.IP = ip
-	ipnet.Mask = ipNet.Mask
+	ipnet.IPNet = ipNet
 	return nil
 }
 
 type NetworkInterfaceConfig struct {
-	Addresses []IPNetWrapper   `json:"addresses" xml:"addresses"`
-	Mac       net.HardwareAddr `json:"mac" xml:"mac"`
+	Address IPNetWrapper     `json:"address" xml:"address"`
+	Mac     net.HardwareAddr `json:"mac" xml:"mac"`
 }
 
 type DiskDevice struct {
@@ -49,6 +50,6 @@ type Manifest struct {
 	Memory            MemoryConfig             `json:"memory" xml:"memory"`
 	Vcpu              CpuConfig                `json:"vcpu" xml:"vcpu"`
 	Tenant            string                   `json:"tenant" xml:"tenant"`
-	DefaultNetwork    NetworkInterfaceConfig   `json:"default_network" xml:"default_network"`
+	DefaultNetwork    []NetworkInterfaceConfig `json:"default_network" xml:"default_network"`
 	PrivateNetworks   []NetworkInterfaceConfig `json:"private_networks" xml:"private_networks"` // VPC
 }

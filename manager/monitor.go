@@ -1,6 +1,8 @@
 package vmmanager
 
 import (
+	virtualmachine "vmm/virtual_machine"
+
 	"go.uber.org/zap"
 )
 
@@ -14,23 +16,23 @@ type VMConfig struct {
 }
 
 type HypervisorMonitor struct {
-	VirtualMachines map[string]VirtualMachine
-	fs              *FileSystemWrapper
+	VirtualMachines map[string]virtualmachine.VirtualMachine
+	fs              *virtualmachine.FileSystemWrapper
 	logger          *zap.Logger
 }
 
-func NewHypervisorMonitor(fs *FileSystemWrapper, logger *zap.Logger) *HypervisorMonitor {
+func NewHypervisorMonitor(fs *virtualmachine.FileSystemWrapper, logger *zap.Logger) *HypervisorMonitor {
 	return &HypervisorMonitor{
 		fs:     fs,
 		logger: logger,
 	}
 }
 
-func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHInstance, manifestList []*Manifest) error {
+func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHInstance, manifestList []*virtualmachine.Manifest) error {
 	var i int
 	var err error
 	for i = 0; i < len(manifestList); i++ {
-		var vmId = manifestList[i].GuestName
+		var vmId = manifestList[i].GuestIdentifier
 		hm.VirtualMachines[vmId] = VirtualMachine{
 			PID:      nil,
 			Manifest: manifestList[i],

@@ -56,9 +56,19 @@ func (vm *VirtualMachine) Create() error {
 	if err != nil {
 		return err
 	}
-	for i := 0; i < len(vm.Manifest.DefaultNetwork); i++ {
-		currentNet := vm.Manifest.DefaultNetwork[i]
-		err = vmnetworking.CreateTapInterface(vm.Manifest.GuestName, currentNet.Address.IP, currentNet.Address.IPNet.Mask, master)
+	for i := 0; i < len(vm.Manifest.Net); i++ {
+		currentNet := vm.Manifest.Net[i]
+		interfaceName, err := vm.NetworkStack.GenereateDeviceName(&vmnetworking.NetworkIdentifier{
+			Ip:        currentNet.Address.IP,
+			Mask:      currentNet.Address.IPNet.Mask,
+			Tenant:    vm.Manifest.Tenant,
+			GuestName: vm.Manifest.GuestName,
+		})
+		if err != nil {
+			vm.Logger.Error("There was an error creating network interface name")
+			continue
+		}
+		err = vmnetworking.CreateTapInterface(*interfaceName.Tap, currentNet.Address.IP, currentNet.Address.IPNet.Mask, master)
 		if err != nil {
 			vm.Logger.Error("There was an error creating a tap interface",
 				zap.String("guest_vm", vm.Manifest.GuestName),

@@ -12,6 +12,7 @@ import (
 
 type VirtualMachineNetworkUtility struct {
 	defaultBridgeNetwork net.IPNet
+	defaultBridge        netlink.Link
 }
 
 type NamingConvention struct {
@@ -22,9 +23,10 @@ type NamingConvention struct {
 }
 
 type NetworkIdentifier struct {
-	Ip     net.IP
-	Mask   net.IPMask
-	Tenant string
+	Ip        net.IP
+	Mask      net.IPMask
+	Tenant    string
+	GuestName string
 }
 
 type NetworkDeviceNameGeneration struct {
@@ -57,10 +59,10 @@ func ParseDeviceName(name string) (*NamingConvention, error) {
 func ParseIp4ToNetDeviceString(ip net.IP, mask net.IPMask) string {
 	ones, _ := mask.Size()
 	var parts []string = []string{}
-	parts = append(parts, string(ip[0]))
-	parts = append(parts, string(ip[1]))
-	parts = append(parts, string(ip[2]))
-	parts = append(parts, string(ip[3]))
+	parts = append(parts, strconv.Itoa(int(ip[0])))
+	parts = append(parts, strconv.Itoa(int(ip[1])))
+	parts = append(parts, strconv.Itoa(int(ip[2])))
+	parts = append(parts, strconv.Itoa(int(ip[3])))
 	parts = append(parts, strconv.Itoa(ones))
 	return strings.Join(parts, "-")
 }
@@ -72,12 +74,12 @@ func (vmn *VirtualMachineNetworkUtility) GenereateDeviceName(ni *NetworkIdentifi
 		// IP is inside the default host network
 		var bridge []string = []string{}
 		bridge = append(bridge, "chbrdef")
-		bridge = append(bridge, ParseIp4ToNetDeviceString(vmn.defaultBridgeNetwork.IP, ni.Mask))
+		bridge = append(bridge, ParseIp4ToNetDeviceString(vmn.defaultBridgeNetwork.IP.To4(), ni.Mask))
 		var bridgeStr string = strings.Join(bridge, "-")
 		var tap []string = []string{}
 		tap = append(tap, "chtap")
-		tap = append(tap, ni.Tenant)
-		tap = append(tap, ParseIp4ToNetDeviceString(ni.Ip, ni.Mask))
+		tap = append(tap, ni.GuestName)
+		tap = append(tap, ParseIp4ToNetDeviceString(ni.Ip.To4(), ni.Mask))
 		var tapStr string = strings.Join(tap, "-")
 		return &NetworkDeviceNameGeneration{
 			Bridge: &bridgeStr,
@@ -89,12 +91,12 @@ func (vmn *VirtualMachineNetworkUtility) GenereateDeviceName(ni *NetworkIdentifi
 	var networkIp = ni.Ip.To4().Mask(ni.Mask)
 	bridge = append(bridge, "chbrvpc")
 	bridge = append(bridge, ni.Tenant)
-	bridge = append(bridge, ParseIp4ToNetDeviceString(networkIp, ni.Mask))
+	bridge = append(bridge, ParseIp4ToNetDeviceString(networkIp.To4(), ni.Mask))
 	var bridgeStr string = strings.Join(bridge, "-")
 	var tap []string = []string{}
 	tap = append(tap, "chtap")
 	tap = append(tap, ni.Tenant)
-	tap = append(tap, ParseIp4ToNetDeviceString(ni.Ip, ni.Mask))
+	tap = append(tap, ParseIp4ToNetDeviceString(ni.Ip.To4(), ni.Mask))
 	var tapStr string = strings.Join(tap, "-")
 	return &NetworkDeviceNameGeneration{
 		Bridge: &bridgeStr,
@@ -108,14 +110,6 @@ func (nc *NamingConvention) Is(value string) bool {
 		return false
 	}
 	return nc.Prefix == value
-}
-
-func (nc *NamingConvention) IsVpcBridge() bool {
-	return nc.Is("chbrvpc")
-}
-
-func (nc *NamingConvention) IsDefaultBridge() bool {
-	return nc.Is("chbrdef")
 }
 
 func (nc *NamingConvention) IsVirtualMachineTap() bool {
@@ -187,36 +181,11 @@ func (nm *VirtualMachineNetworkUtility) GetAllTapDevices() ([]netlink.Link, erro
 		if err != nil {
 			return false
 		}
-		if !(nc.IsDefaultBridge() || nc.IsVpcBridge()) {
-			return false
-		}
 		return true
 	})
 }
 
-func (nm *VirtualMachineNetworkUtility) GetAllVpcBridgeDevices() ([]netlink.Link, error) {
-	return filterLinksBy(func(link netlink.Link) bool {
-		_, ok := link.(*netlink.Bridge)
-		if !ok {
-			return false
-		}
-		nc, err := ParseDeviceName(link.Attrs().Name)
-		if err != nil {
-			return false
-		}
-		return nc.IsVpcBridge()
-	})
-}
-
-func (nm *VirtualMachineNetworkUtility) GetDefaultBridge() (netlink.Link, error) {
-	var bridge []string = []string{}
-	bridge = append(bridge, "chbrdef")
-	bridge = append(bridge, ParseIp4ToNetDeviceString(nm.defaultBridgeNetwork.IP, nm.defaultBridgeNetwork.Mask))
-	var bridgeStr = strings.Join(bridge, "-")
-
-	link, err := netlink.LinkByName(bridgeStr)
-	if err != nil {
-		return nil, err
-	}
-	return link, nil
+func GenerateTapName(ip net.IP, ipNet *net.IPNet) string {
+	var str string = ParseIp4ToNetDeviceString(ip.To4(), ipNet.Mask)
+	return fmt.Sprintf("chtap-%s", str)
 }

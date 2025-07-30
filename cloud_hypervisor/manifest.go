@@ -1,11 +1,11 @@
-package cloudhypervisortypes
+package cloudhypervisor
 
-type VirtualMachineCreate struct {
+type Manifest struct {
 	Cpus    VmCpus  `json:"cpus" yaml:"cpus"`
 	Payload Payload `json:"payload" yaml:"payload"`
 	Disks   []Disks `json:"disks" yaml:"disks"`
 	Rng     Rng     `json:"rng" yaml:"rng"`
-	Net     Net     `json:"net" yaml:"net"`
+	Net     []Net   `json:"net" yaml:"net"`
 	Serial  Serial  `json:"serial" yaml:"serial"`
 	Console Console `json:"console" yaml:"console"`
 }
@@ -21,7 +21,7 @@ type Payload struct {
 }
 
 type Disks struct {
-	Path string `json:"path" yaml:"path"`
+	Name string `json:"name" yaml:"name"`
 }
 
 type Rng struct {
@@ -29,8 +29,10 @@ type Rng struct {
 }
 
 type Net struct {
-	Mac string `json:"mac" yaml:"mac"`
-	Tap string `json:"tap" yaml:"tap"`
+	Mac  string `json:"mac" yaml:"mac"`
+	Ip   string `json:"ip" yaml:"ip"`
+	Mask string `json:"mask" yaml:"mask"`
+	Tap  string `json:"tap" yaml:"tap"`
 }
 
 type Serial struct {
@@ -39,4 +41,17 @@ type Serial struct {
 
 type Console struct {
 	Mode string `json:"mode" yaml:"mode"`
+}
+
+// This should return a struct with the same fields as "net" field in cloud-hypervisor vm configuration
+func (n *Net) MarshalJSON() ([]byte, error) {
+	return []byte{}, nil
+}
+
+func (n *Net) UnmarshalJSON(data []byte) error {
+	return nil
+}
+
+func (d *Disks) MarshalJSON() ([]byte, error) {
+	return []byte{}, nil
 }

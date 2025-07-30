@@ -1,55 +1,31 @@
 package vmmanager
 
 import (
+	"errors"
 	"net"
+	vmstorage "vmm/storage"
 )
 
-type IPNetWrapper struct {
-	IPNet *net.IPNet
-	IP    net.IP
-}
-
-func (ipnet *IPNetWrapper) UnmarshalText(text []byte) error {
-	var ip net.IP
-	var ipNet *net.IPNet
-	var err error
-	ip, ipNet, err = net.ParseCIDR(string(text))
-	if err != nil {
-		return err
-	}
-	ipnet.IP = ip
-	ipnet.IPNet = ipNet
-	return nil
-}
-
-type NetworkInterfaceConfig struct {
-	Address IPNetWrapper     `json:"address" xml:"address"`
-	Mac     net.HardwareAddr `json:"mac" xml:"mac"`
-}
-
-type DiskDevice struct {
-	Name string `json:"name" xml:"name"`
-	Size int64  `json:"size" xml:"size"`
-}
-
-type MemoryConfig struct {
-	Size int `json:"size" xml:"size"`
-}
-
-type CpuConfig struct {
-	Count int    `json:"vcpu" xml:"vcpu"`
-	Limit string `json:"limit" xml:"limit"`
-}
-
 type Manifest struct {
-	GuestName         string                   `json:"guest_name" xml:"guest_name"`
-	Disks             []DiskDevice             `json:"disks" xml:"disks"`
-	EnableIpSpoofing  bool                     `json:"enable_ip_spoofing" xml:"enable_ip_spoofing"`
-	EnableMacSpoofing bool                     `json:"enable_mac_spoofing" xml:"enable_mac_spoofing"`
-	EnableBroadcast   bool                     `json:"enable_broadcast" xml:"enable_broadcast"`
-	Memory            MemoryConfig             `json:"memory" xml:"memory"`
-	Vcpu              CpuConfig                `json:"vcpu" xml:"vcpu"`
-	Tenant            string                   `json:"tenant" xml:"tenant"`
-	DefaultNetwork    []NetworkInterfaceConfig `json:"default_network" xml:"default_network"`
-	PrivateNetworks   []NetworkInterfaceConfig `json:"private_networks" xml:"private_networks"` // VPC
+	Bridge              string    `json:"bridge" yaml:"bridge"`
+	Server              Server    `json:"server" yaml:"server"`
+	Network             net.IPNet `json:"network" yaml:"network"`
+	HypervisorPath      string    `json:"hypervisor_path" yaml:"hypervisor_path"`
+	HypervisorSocketUri string    `json:"socket_uri" yaml:"socket_uri"`
+}
+
+type Server struct {
+	ListeningAddress string `json:"listening_address" yaml:"listening_address"`
+	StoragePath      string `json:"storage_path" yaml:"storage_path"`
+}
+
+func LoadManifest(path string) (*Manifest, error) {
+	var manifest *Manifest
+	var err error
+
+	manifest, err = vmstorage.ReadJson[*Manifest](path)
+	if err != nil {
+		return nil, errors.New("unable to read manifest file")
+	}
+	return manifest, nil
 }

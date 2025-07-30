@@ -1,4 +1,4 @@
-package vmmanager
+package virtualmachine
 
 import (
 	"errors"
@@ -47,8 +47,8 @@ func (fs *FileSystemWrapper) CreateVirtualMachine(vmId string, manifest *Manifes
 		return err
 	}
 	err = vmstorage.WriteJson(fs.GetManifestPath(vmId), manifest)
-	for i := 0; i < len(manifest.Disks); i++ {
-		var tmpFileName string = fmt.Sprintf("%s.tmp", manifest.Disks[i].Name)
+	for i := 0; i < len(manifest.Config.Disks); i++ {
+		var tmpFileName string = fmt.Sprintf("%s.tmp", manifest.Config.Disks[i].Name)
 		err = vmstorage.CreateFile(fs.GetDiskPath(vmId, tmpFileName))
 		if err != nil {
 			fs.logger.Error("Unable to create file", zap.String("path", fs.GetDiskPath(vmId, tmpFileName)))

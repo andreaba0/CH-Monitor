@@ -12,7 +12,6 @@ import (
 
 type VirtualMachineNetworkUtility struct {
 	defaultBridgeNetwork net.IPNet
-	defaultBridge        netlink.Link
 }
 
 type NamingConvention struct {
@@ -177,15 +176,12 @@ func (nm *VirtualMachineNetworkUtility) GetAllTapDevices() ([]netlink.Link, erro
 		if err != nil {
 			return false
 		}
-		nc, err = ParseDeviceName(master.Attrs().Name)
-		if err != nil {
-			return false
-		}
-		return true
+		_, err = ParseDeviceName(master.Attrs().Name)
+		return err == nil
 	})
 }
 
-func GenerateTapName(ip net.IP, ipNet *net.IPNet) string {
+func GenerateTapName(ip net.IP, ipNet net.IPNet) string {
 	var str string = ParseIp4ToNetDeviceString(ip.To4(), ipNet.Mask)
 	return fmt.Sprintf("chtap-%s", str)
 }

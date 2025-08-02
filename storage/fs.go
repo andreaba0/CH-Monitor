@@ -10,7 +10,19 @@ func CreateFile(path string) error {
 	var err error
 	var fd *os.File
 
-	fd, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.ModePerm)
+	fd, err = os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	return nil
+}
+
+func CreateFileIfNotExists(filePath string) error {
+	var err error
+	var fd *os.File
+
+	fd, err = os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -62,11 +74,17 @@ func ReadJson[T any](path string) (T, error) {
 func WriteJson[T any](path string, content T) error {
 	var err error
 	var dataByte []byte
+	var fd *os.File
 	dataByte, err = json.Marshal(content)
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(path, dataByte, os.ModePerm)
+	fd, err = os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	_, err = fd.Write(dataByte)
 	return err
 }
 

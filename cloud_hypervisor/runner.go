@@ -3,12 +3,14 @@ package cloudhypervisor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vishvananda/netlink"
 )
 
@@ -18,6 +20,7 @@ type CloudHypervisor struct {
 	binaryPath    string
 	httpClient    *http.Client
 	defaultBridge netlink.Link
+	socketPath    string
 }
 
 func CreateTransportSocket(socket string) *http.Client {
@@ -34,24 +37,18 @@ func CreateTransportSocket(socket string) *http.Client {
 	return client
 }
 
-func LoadFromExisting(pid int, socket string, manifest *Manifest, binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
-	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
-		pid:           pid,
-		manifest:      manifest,
-		binaryPath:    binaryPath,
-		httpClient:    CreateTransportSocket(socket),
-		defaultBridge: defaultBridge,
+func NewCloudHypervisor(manifest *Manifest, binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
+	socketUuid, err := uuid.NewUUID()
+	if err != nil {
+		return nil, errors.New("error while generating uuid for socket file")
 	}
-	return cloudHypervisor, nil
-}
-
-func NewCloudHypervisor(socket string, manifest *Manifest, binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
-
+	var socketPath string = fmt.Sprintf("/tmp/vm-net-%s.sock", socketUuid)
 	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
 		manifest:      manifest,
 		binaryPath:    binaryPath,
-		httpClient:    CreateTransportSocket(socket),
+		httpClient:    CreateTransportSocket(socketPath),
 		defaultBridge: defaultBridge,
+		socketPath:    socketPath,
 	}
 	return cloudHypervisor, nil
 }
@@ -68,11 +65,6 @@ func (ch *CloudHypervisor) Kill() error {
 	return nil
 }
 
-type RunningInstance struct {
-	socket          string
-	cloudHypervisor *CloudHypervisor
-}
-
-func LoadRunning(binaryPath string) []RunningInstance {
-
+func LoadRunning(binaryPath string) []CloudHypervisor {
+	return []CloudHypervisor{}
 }

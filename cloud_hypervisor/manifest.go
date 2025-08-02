@@ -1,13 +1,20 @@
 package cloudhypervisor
 
+import "github.com/google/uuid"
+
 type Manifest struct {
-	Cpus    VmCpus  `json:"cpus" yaml:"cpus"`
-	Payload Payload `json:"payload" yaml:"payload"`
-	Disks   []Disks `json:"disks" yaml:"disks"`
-	Rng     Rng     `json:"rng" yaml:"rng"`
-	Net     []Net   `json:"net" yaml:"net"`
-	Serial  Serial  `json:"serial" yaml:"serial"`
-	Console Console `json:"console" yaml:"console"`
+	Cpus     VmCpus   `json:"cpus" yaml:"cpus"`
+	Payload  Payload  `json:"payload" yaml:"payload"`
+	Disks    []Disks  `json:"disks" yaml:"disks"`
+	Rng      Rng      `json:"rng" yaml:"rng"`
+	Net      []Net    `json:"net" yaml:"net"`
+	Serial   Serial   `json:"serial" yaml:"serial"`
+	Console  Console  `json:"console" yaml:"console"`
+	Platform Platform `json:"platform" yaml:"platform"`
+}
+
+type Platform struct {
+	Uuid uuid.UUID `json:"uuid" yaml:"uuid"`
 }
 
 type VmCpus struct {

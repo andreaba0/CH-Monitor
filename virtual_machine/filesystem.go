@@ -1,8 +1,7 @@
 package virtualmachine
 
 import (
-	"errors"
-	"fmt"
+	"io"
 	"path/filepath"
 	vmstorage "vmm/storage"
 
@@ -14,72 +13,43 @@ type FileSystemWrapper struct {
 	logger   *zap.Logger
 }
 
-func NewFileSystemWrapper(path string, logger *zap.Logger) (*FileSystemWrapper, error) {
-	if path == "" {
-		return nil, errors.New("path to vm storage required")
-	}
-
-	return &FileSystemWrapper{
-		basePath: path,
-		logger:   logger,
-	}, nil
+func (fs *FileSystemWrapper) GetManifestPath() string {
+	return filepath.Join(fs.basePath, "manifest.json")
 }
 
-func (fs *FileSystemWrapper) GetManifestPath(vmId string) string {
-	return filepath.Join(fs.basePath, vmId, "manifest.json")
+func (fs *FileSystemWrapper) GetDiskPath(diskName string) string {
+	return filepath.Join(fs.basePath, "disks", diskName)
 }
 
-func (fs *FileSystemWrapper) GetDiskPath(vmId string, diskName string) string {
-	return filepath.Join(fs.basePath, vmId, "disks", diskName)
+func (fs *FileSystemWrapper) GetDiskStoragePath() string {
+	return filepath.Join(fs.basePath, "disks")
 }
 
-func (fs *FileSystemWrapper) GetSocketPath(vmId string) string {
-	return filepath.Join(fs.basePath, vmId, "cloud-hypervisor-vm.sock")
-}
-
-func (fs *FileSystemWrapper) GetDiskStoragePath(vmId string) string {
-	return filepath.Join(fs.basePath, vmId, "disks")
-}
-
-func (fs *FileSystemWrapper) CreateVirtualMachine(vmId string, manifest *Manifest) error {
-	var err error = vmstorage.CreateFolderRec(fs.GetDiskStoragePath(vmId))
-	if err != nil {
-		return err
-	}
-	err = vmstorage.WriteJson(fs.GetManifestPath(vmId), manifest)
-	for i := 0; i < len(manifest.Config.Disks); i++ {
-		var tmpFileName string = fmt.Sprintf("%s.tmp", manifest.Config.Disks[i].Name)
-		err = vmstorage.CreateFile(fs.GetDiskPath(vmId, tmpFileName))
-		if err != nil {
-			fs.logger.Error("Unable to create file", zap.String("path", fs.GetDiskPath(vmId, tmpFileName)))
-		}
-	}
-	return err
-}
-
-func (fs *FileSystemWrapper) ReadManifest(vmId string) (*Manifest, error) {
-	manifest, err := vmstorage.ReadJson[*Manifest](fs.GetManifestPath(vmId))
+func (fs *FileSystemWrapper) ReadManifest() (*Manifest, error) {
+	manifest, err := vmstorage.ReadJson[*Manifest](fs.GetManifestPath())
 	if err != nil {
 		return nil, err
 	}
 	return manifest, nil
 }
 
-func (fs *FileSystemWrapper) GetVirtualMachineList() ([]*Manifest, error) {
-	var res []*Manifest = []*Manifest{}
-	entries, err := vmstorage.ListFolder(fs.basePath)
+func (fs *FileSystemWrapper) StoreManifest(manifest *Manifest) error {
+	var err error = vmstorage.CreateFolderRec(fs.basePath)
 	if err != nil {
-		return []*Manifest{}, err
+		return err
 	}
-	for _, entry := range entries {
-		if !entry.IsFolder {
-			continue
-		}
-		manifest, err := vmstorage.ReadJson[*Manifest](fs.GetManifestPath(entry.Name))
-		if err != nil {
-			fs.logger.Error("Unable to read manifest from file", zap.String("path", fs.GetManifestPath(entry.Name)))
-		}
-		res = append(res, manifest)
+	err = vmstorage.WriteJson(fs.GetManifestPath(), manifest)
+	return err
+}
+
+func (fs *FileSystemWrapper) CreateDisk(diskName string) error {
+	var err error = vmstorage.CreateFolderRec(fs.basePath)
+	if err != nil {
+		return err
 	}
-	return res, nil
+	return vmstorage.CreateFile(fs.GetDiskPath(diskName))
+}
+
+func (fs *FileSystemWrapper) WriteChunk(diskName string, byteIndex int64, chunk io.Reader) error {
+	return vmstorage.WriteFileChunk(fs.GetDiskPath(diskName), byteIndex, chunk)
 }

@@ -1,6 +1,7 @@
 package vmmanager
 
 import (
+	"sync"
 	virtualmachine "vmm/virtual_machine"
 
 	"go.uber.org/zap"
@@ -17,6 +18,7 @@ type VMConfig struct {
 
 type HypervisorMonitor struct {
 	VirtualMachines map[string]virtualmachine.VirtualMachine
+	vmsMu           sync.Mutex
 	fs              *virtualmachine.FileSystemWrapper
 	logger          *zap.Logger
 }
@@ -61,3 +63,22 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHIns
 	}
 	return nil
 }
+
+/*func GetVirtualMachineList() ([]*Manifest, error) {
+	var res []*Manifest = []*Manifest{}
+	entries, err := vmstorage.ListFolder(fs.basePath)
+	if err != nil {
+		return []*Manifest{}, err
+	}
+	for _, entry := range entries {
+		if !entry.IsFolder {
+			continue
+		}
+		manifest, err := vmstorage.ReadJson[*Manifest](fs.GetManifestPath(entry.Name))
+		if err != nil {
+			fs.logger.Error("Unable to read manifest from file", zap.String("path", fs.GetManifestPath(entry.Name)))
+		}
+		res = append(res, manifest)
+	}
+	return res, nil
+}*/

@@ -39,35 +39,3 @@ func CreateTapInterface(vmId string, networkAddress net.IP, networkMask net.IPMa
 	}
 	return nil
 }
-
-func CreateBridgeInterface(placeholder string, networkAddress net.IP, networkMask net.IPMask, master *netlink.Link) error {
-	var ipv4 net.IP = networkAddress.To4()
-	var index int = 0
-	var err error
-	if ipv4 == nil {
-		return errors.New("invalid ip address")
-	}
-	ones, _ := networkMask.Size()
-	if master != nil {
-		index = (*master).Attrs().Index
-	}
-	var bridge netlink.Bridge = netlink.Bridge{
-		LinkAttrs: netlink.LinkAttrs{
-			Name: fmt.Sprintf(
-				"chtap-%s-%s-%s-%s-%s-%s",
-				strings.ToLower(placeholder),
-				strconv.Itoa(int(ipv4[0])),
-				strconv.Itoa(int(ipv4[1])),
-				strconv.Itoa(int(ipv4[2])),
-				strconv.Itoa(int(ipv4[3])),
-				strconv.Itoa(ones),
-			),
-			MasterIndex: index,
-		},
-	}
-	err = netlink.LinkAdd(&bridge)
-	if err != nil {
-		return err
-	}
-	return nil
-}

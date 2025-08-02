@@ -15,7 +15,7 @@ type Manifest struct {
 	Config          Config    `json:"hypervisor_config" yaml:"hypervisor_config"`
 }
 
-func (manifest *Manifest) ParseToInstanceRequest() (*cloudhypervisor.CloudHypervisor, error) {
+func (manifest *Manifest) ParseToInstanceRequest() (*cloudhypervisor.Manifest, error) {
 	return nil, nil
 }
 

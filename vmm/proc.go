@@ -1,34 +1,17 @@
 package vmm
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	cloudhypervisor "vmm/cloud_hypervisor"
 	"vmm/utils"
 )
 
-type RunningCHInstance struct {
-	UnixSocketPath string
-	PID            int
-}
-
-func (rchi *RunningCHInstance) GetVirtualMachineIdFromSocket(basePath string) (string, error) {
-	rel, err := filepath.Rel(basePath, rchi.UnixSocketPath)
-	if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
-		return "", errors.New("invalid socket path")
-	}
-	parts := strings.Split(rel, string(os.PathSeparator))
-	if len(parts) < 2 {
-		return "", errors.New("unexpected socket structure")
-	}
-	return parts[0], nil
-}
-
-func parseProcFolder(cloudHypervisorPath string, pid int, procPath string, done chan<- *RunningCHInstance) {
+func parseProcFolder(cloudHypervisorPath string, pid int, procPath string, done chan<- *cloudhypervisor.CloudHypervisor) {
 	// Read content of exe and cwd files to get process info
 	// Step 1: check if the binary is related to Cloud-Hypervisor
 	// Step 2: push process info (unix socket) to pool of vms to provision
@@ -73,20 +56,17 @@ func parseProcFolder(cloudHypervisorPath string, pid int, procPath string, done 
 		return
 	}
 
-	done <- &RunningCHInstance{
-		PID:            pid,
-		UnixSocketPath: cmdSocketParsing.Path,
-	}
+	done <- cloudhypervisor.LoadRunningInstance(pid, cmdSocketParsing.Path)
 }
 
-func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]RunningCHInstance, error) {
+func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]*cloudhypervisor.CloudHypervisor, error) {
 	// List all processes in /proc
 
 	var chanPool int = 20
-	var procs chan *RunningCHInstance = make(chan *RunningCHInstance, chanPool)
+	var procs chan *cloudhypervisor.CloudHypervisor = make(chan *cloudhypervisor.CloudHypervisor, chanPool)
 	var index int
 	var poolIndex int
-	var procList []RunningCHInstance = make([]RunningCHInstance, 0)
+	var procList []*cloudhypervisor.CloudHypervisor = make([]*cloudhypervisor.CloudHypervisor, 0)
 
 	files, err := os.ReadDir("/proc")
 	if err != nil {
@@ -94,7 +74,7 @@ func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]RunningCHInstance, e
 	}
 	index = 0
 	poolIndex = 0
-	var chInstance *RunningCHInstance
+	var chInstance *cloudhypervisor.CloudHypervisor
 	var i int
 	for index < len(files) {
 
@@ -134,7 +114,7 @@ func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]RunningCHInstance, e
 			if chInstance == nil {
 				continue
 			}
-			procList = append(procList, *chInstance)
+			procList = append(procList, chInstance)
 		}
 	}
 
@@ -143,7 +123,7 @@ func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]RunningCHInstance, e
 		if chInstance == nil {
 			continue
 		}
-		procList = append(procList, *chInstance)
+		procList = append(procList, chInstance)
 	}
 
 	return procList, nil

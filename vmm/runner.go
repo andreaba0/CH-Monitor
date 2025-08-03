@@ -3,6 +3,7 @@ package vmm
 import (
 	"path/filepath"
 	"sync"
+	cloudhypervisor "vmm/cloud_hypervisor"
 	vmstorage "vmm/storage"
 	virtualmachine "vmm/virtual_machine"
 
@@ -84,7 +85,18 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 	return nil
 }
 
-func (hm *HypervisorMonitor) MergeRunningInstances() error {
+func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinary *HypervisorBinary) error {
+	var err error
+	var instances []*cloudhypervisor.CloudHypervisor
+	instances, err = LoadProcessData(hypervisorBinary)
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(instances); i++ {
+		// TODO:
+		// 1. Make HTTP call to instances to get vm info
+		// 2. Assign instances to correct vm based on platform UUID
+	}
 	return nil
 }
 

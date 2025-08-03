@@ -1,12 +1,12 @@
 package webserver
 
 import (
-	vmmanager "vmm/manager"
+	"vmm/vmm"
 
 	"github.com/labstack/echo/v4"
 )
 
-func Run(vmFileSystemStorage *vmmanager.FileSystemWrapper, vmmManager *vmmanager.HypervisorMonitor, socket string) {
+func Run(vmFileSystemStorage *vmm.FileSystemWrapper, vmmManager *vmm.HypervisorMonitor, socket string) {
 	var e *echo.Echo = echo.New()
 	var virtualMachineUpload *VirtualMachineUpload = &VirtualMachineUpload{
 		VmFileSystemStorage: vmFileSystemStorage,

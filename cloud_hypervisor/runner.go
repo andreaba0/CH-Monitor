@@ -15,11 +15,8 @@ import (
 )
 
 type CloudHypervisor struct {
-	pid           int
-	binaryPath    string
-	httpClient    *http.Client
-	defaultBridge netlink.Link
-	socketPath    string
+	pid        int
+	httpClient *http.Client
 }
 
 func CreateTransportSocket(socket string) *http.Client {
@@ -36,22 +33,30 @@ func CreateTransportSocket(socket string) *http.Client {
 	return client
 }
 
-func NewCloudHypervisor(binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
+func NewCloudHypervisor(manifest *Manifest, binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
+
+	// TODO:
+	// 1. Create tap interfaces based on manifest networks and attach them to default bridge
+	// 2. Launch cloud-hypervisor instance as daemon
+	// 3. Return launched instance
+
 	socketUuid, err := uuid.NewUUID()
 	if err != nil {
 		return nil, errors.New("error while generating uuid for socket file")
 	}
 	var socketPath string = fmt.Sprintf("/tmp/vm-net-%s.sock", socketUuid)
 	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
-		binaryPath:    binaryPath,
-		httpClient:    CreateTransportSocket(socketPath),
-		defaultBridge: defaultBridge,
-		socketPath:    socketPath,
+		httpClient: CreateTransportSocket(socketPath),
 	}
 	return cloudHypervisor, nil
 }
 
-func (ch *CloudHypervisor) Kill() error {
+func (ch *CloudHypervisor) Kill(manifest *Manifest) error {
+
+	// TODO:
+	// 1. Terminate current cloud-hypervisor instance
+	// 2. Drop all tap interfaces connected to the instance
+
 	proc, err := os.FindProcess(ch.pid)
 	if err != nil {
 		return errors.New("there was an error searching process by pid")
@@ -63,7 +68,13 @@ func (ch *CloudHypervisor) Kill() error {
 	return nil
 }
 
-func LoadRunningInstance(binaryPath string, defaultBridge netlink.Link) *CloudHypervisor
+func LoadRunningInstance(pid int, socketPath string) *CloudHypervisor {
+	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
+		pid:        pid,
+		httpClient: CreateTransportSocket(socketPath),
+	}
+	return cloudHypervisor
+}
 
 /*
 func (vm *VirtualMachine) Create() error {

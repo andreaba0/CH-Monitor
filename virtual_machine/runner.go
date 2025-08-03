@@ -72,3 +72,9 @@ func (vm *VirtualMachine) WriteChunkToDisk(diskName string, byteIndex int64, chu
 	defer vm.mu.Unlock()
 	return vm.storage.WriteChunk(diskName, byteIndex, chunk)
 }
+
+func (vm *VirtualMachine) AddRunningInstance(hypervisor *cloudhypervisor.CloudHypervisor) {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+	vm.hypervisor = hypervisor
+}

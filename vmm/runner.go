@@ -1,7 +1,9 @@
-package vmmanager
+package vmm
 
 import (
+	"path/filepath"
 	"sync"
+	vmstorage "vmm/storage"
 	virtualmachine "vmm/virtual_machine"
 
 	"go.uber.org/zap"
@@ -17,22 +19,40 @@ type VMConfig struct {
 }
 
 type HypervisorMonitor struct {
-	VirtualMachines map[string]virtualmachine.VirtualMachine
+	VirtualMachines map[string]*virtualmachine.VirtualMachine
 	vmsMu           sync.Mutex
-	fs              *virtualmachine.FileSystemWrapper
 	logger          *zap.Logger
 }
 
-func NewHypervisorMonitor(fs *virtualmachine.FileSystemWrapper, logger *zap.Logger) *HypervisorMonitor {
+func NewHypervisorMonitor(logger *zap.Logger) *HypervisorMonitor {
 	return &HypervisorMonitor{
-		fs:     fs,
-		logger: logger,
+		VirtualMachines: make(map[string]*virtualmachine.VirtualMachine),
+		logger:          logger,
 	}
 }
 
-func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHInstance, manifestList []*virtualmachine.Manifest) error {
-	var i int
+func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
+
+	hm.vmsMu.Lock()
+	defer hm.vmsMu.Unlock()
 	var err error
+	entries, err := vmstorage.ListFolder(basePath)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsFolder {
+			continue
+		}
+		vm, err := virtualmachine.LoadVirtualMachine(filepath.Join(basePath, entry.Name), hm.logger)
+		if err != nil {
+			hm.logger.Error("Unable to read manifest from file", zap.String("base_path", basePath), zap.String("vm_id", entry.Name))
+		}
+		guestName := vm.GetManifest().GuestIdentifier
+		hm.VirtualMachines[guestName.String()] = vm
+	}
+
+	/*var i int
 	for i = 0; i < len(manifestList); i++ {
 		var vmId = manifestList[i].GuestIdentifier
 		hm.VirtualMachines[vmId] = VirtualMachine{
@@ -60,7 +80,11 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(runningInstances []RunningCHIns
 			PID:      &instance.PID,
 			Manifest: hm.VirtualMachines[vmId].Manifest,
 		}
-	}
+	}*/
+	return nil
+}
+
+func (hm *HypervisorMonitor) MergeRunningInstances() error {
 	return nil
 }
 

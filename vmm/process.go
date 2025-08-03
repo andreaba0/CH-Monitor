@@ -1,4 +1,4 @@
-package vmmanager
+package vmm
 
 import (
 	"errors"

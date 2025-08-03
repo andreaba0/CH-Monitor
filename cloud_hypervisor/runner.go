@@ -16,7 +16,6 @@ import (
 
 type CloudHypervisor struct {
 	pid           int
-	manifest      *Manifest
 	binaryPath    string
 	httpClient    *http.Client
 	defaultBridge netlink.Link
@@ -37,14 +36,13 @@ func CreateTransportSocket(socket string) *http.Client {
 	return client
 }
 
-func NewCloudHypervisor(manifest *Manifest, binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
+func NewCloudHypervisor(binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
 	socketUuid, err := uuid.NewUUID()
 	if err != nil {
 		return nil, errors.New("error while generating uuid for socket file")
 	}
 	var socketPath string = fmt.Sprintf("/tmp/vm-net-%s.sock", socketUuid)
 	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
-		manifest:      manifest,
 		binaryPath:    binaryPath,
 		httpClient:    CreateTransportSocket(socketPath),
 		defaultBridge: defaultBridge,
@@ -65,6 +63,63 @@ func (ch *CloudHypervisor) Kill() error {
 	return nil
 }
 
-func LoadRunning(binaryPath string) []CloudHypervisor {
-	return []CloudHypervisor{}
+func LoadRunningInstance(binaryPath string, defaultBridge netlink.Link) *CloudHypervisor
+
+/*
+func (vm *VirtualMachine) Create() error {
+	master, err := vm.NetworkStack.GetDefaultBridge()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < len(vm.Manifest.Net); i++ {
+		currentNet := vm.Manifest.Net[i]
+		interfaceName, err := vm.NetworkStack.GenereateDeviceName(&vmnetworking.NetworkIdentifier{
+			Ip:        currentNet.Address.IP,
+			Mask:      currentNet.Address.IPNet.Mask,
+			Tenant:    vm.Manifest.Tenant,
+			GuestName: vm.Manifest.GuestName,
+		})
+		if err != nil {
+			vm.Logger.Error("There was an error creating network interface name")
+			continue
+		}
+		err = vmnetworking.CreateTapInterface(*interfaceName.Tap, currentNet.Address.IP, currentNet.Address.IPNet.Mask, master)
+		if err != nil {
+			vm.Logger.Error("There was an error creating a tap interface",
+				zap.String("guest_vm", vm.Manifest.GuestName),
+				zap.String("ip", string(currentNet.Address.IP)),
+			)
+		}
+	}
+
+	cmd := exec.Command(vm.HypervisorBinary.GetLaunchCommandString(vm.FileSystemStorage.GetSocketPath(vm.Manifest.GuestName)))
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	if err := cmd.Start(); err != nil {
+		vm.Logger.Error("Unable to run process", zap.String("guest_name", vm.Manifest.GuestName))
+		return err
+	}
+	vm.PID = &cmd.Process.Pid
+
+	var uri *string = vm.HypervisorBinary.GetUri(CREATE)
+	if uri == nil {
+		vm.Logger.Error("Unknow URI", zap.String("action", "CREATE"))
+		return errors.New("unknow uri")
+	}
+	req, err := http.NewRequest("POST", *uri, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := vm.HttpClient.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	return nil
 }
+*/

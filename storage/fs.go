@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+
+	"gopkg.in/yaml.v3"
 )
 
 func CreateFile(path string) error {
@@ -54,6 +56,21 @@ func WriteFileChunk(path string, byteIndex int64, chunk io.Reader) error {
 func RenameFile(oldPath string, newPath string) error {
 	var err error = os.Rename(oldPath, newPath)
 	return err
+}
+
+func ReadYaml[T any](path string) (T, error) {
+	var res T
+	var err error
+	var dataByte []byte = []byte{}
+	dataByte, err = os.ReadFile(path)
+	if err != nil {
+		return res, err
+	}
+	err = yaml.Unmarshal(dataByte, &res)
+	if err != nil {
+		return res, err
+	}
+	return res, err
 }
 
 func ReadJson[T any](path string) (T, error) {

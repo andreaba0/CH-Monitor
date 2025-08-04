@@ -1,14 +1,19 @@
 package webserver
 
 import (
-	vmmanager "vmm/manager"
+	"vmm/vmm"
 
 	"github.com/labstack/echo/v4"
 )
 
 type VirtualMachineManagerApi struct {
-	fs  *vmmanager.FileSystemWrapper
-	vmm *vmmanager.HypervisorMonitor
+	vmm *vmm.HypervisorMonitor
+}
+
+func NewVirtualMachineManagerApi(vmm *vmm.HypervisorMonitor) *VirtualMachineManagerApi {
+	return &VirtualMachineManagerApi{
+		vmm: vmm,
+	}
 }
 
 func (vmmApi *VirtualMachineManagerApi) CreateVirtualMachine() echo.HandlerFunc {

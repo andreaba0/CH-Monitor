@@ -15,8 +15,7 @@ type Manifest struct {
 }
 
 type Server struct {
-	ListeningAddress string `json:"listening_address" yaml:"listening_address"`
-	StoragePath      string `json:"storage_path" yaml:"storage_path"`
+	StoragePath string `json:"storage_path" yaml:"storage_path"`
 }
 
 func LoadManifest(path string) (*Manifest, error) {

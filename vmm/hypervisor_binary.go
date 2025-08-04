@@ -9,30 +9,35 @@ const (
 	DELETE
 	BOOT
 	SHUTDOWN
+	INFO
 )
 
 type HypervisorBinary struct {
-	BinaryPath string
-	RemoteUri  string
+	remoteUri string
 }
 
-func (hb *HypervisorBinary) GetLaunchCommandString(socket string) string {
-	return fmt.Sprintf("%s --api-socket path=%s", hb.BinaryPath, socket)
+func NewHypervisorBinary(remoteUri string) *HypervisorBinary {
+	return &HypervisorBinary{
+		remoteUri: remoteUri,
+	}
 }
 
 func (hb *HypervisorBinary) GetUri(action VirtualMachineAction) *string {
 	switch action {
 	case CREATE:
-		str := fmt.Sprintf("%s/vm.create", hb.RemoteUri)
+		str := fmt.Sprintf("%s/vm.create", hb.remoteUri)
 		return &str
 	case BOOT:
-		str := fmt.Sprintf("%s/vm.boot", hb.RemoteUri)
+		str := fmt.Sprintf("%s/vm.boot", hb.remoteUri)
 		return &str
 	case DELETE:
-		str := fmt.Sprintf("%s/vm.delete", hb.RemoteUri)
+		str := fmt.Sprintf("%s/vm.delete", hb.remoteUri)
 		return &str
 	case SHUTDOWN:
-		str := fmt.Sprintf("%s/vm.shutdown", hb.RemoteUri)
+		str := fmt.Sprintf("%s/vm.shutdown", hb.remoteUri)
+		return &str
+	case INFO:
+		str := fmt.Sprintf("%s/vm.info", hb.remoteUri)
 		return &str
 	default:
 		return nil

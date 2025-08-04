@@ -1,6 +1,9 @@
 package vmm
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"path/filepath"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
@@ -9,15 +12,6 @@ import (
 
 	"go.uber.org/zap"
 )
-
-type VMConfig struct {
-	RootfsName    string
-	AttachedDisks []string
-	Kernel        string
-	UnixSocket    string
-	TapDevice     string
-	PID           int
-}
 
 type HypervisorMonitor struct {
 	VirtualMachines map[string]*virtualmachine.VirtualMachine
@@ -30,6 +24,27 @@ func NewHypervisorMonitor(logger *zap.Logger) *HypervisorMonitor {
 		VirtualMachines: make(map[string]*virtualmachine.VirtualMachine),
 		logger:          logger,
 	}
+}
+
+func MonitorSetup(manifestPath string, vmm *HypervisorMonitor) error {
+	var manifest Manifest
+	var err error
+	manifest, err = vmstorage.ReadYaml[Manifest](manifestPath)
+	if err != nil {
+		return err
+	}
+	var binaryPath string = manifest.HypervisorPath
+	var remoteUri string = manifest.HypervisorSocketUri
+	var hypervisorBinary HypervisorBinary = *NewHypervisorBinary(remoteUri)
+	err = vmm.LoadVirtualMachines(manifest.Server.StoragePath)
+	if err != nil {
+		return err
+	}
+	err = vmm.MergeRunningInstances(binaryPath, &hypervisorBinary)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
@@ -52,69 +67,39 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 		guestName := vm.GetManifest().GuestIdentifier
 		hm.VirtualMachines[guestName.String()] = vm
 	}
-
-	/*var i int
-	for i = 0; i < len(manifestList); i++ {
-		var vmId = manifestList[i].GuestIdentifier
-		hm.VirtualMachines[vmId] = VirtualMachine{
-			PID:      nil,
-			Manifest: manifestList[i],
-		}
-	}
-	for i = 0; i < len(runningInstances); i++ {
-		var instance RunningCHInstance = runningInstances[i]
-		var vmId string
-		vmId, err = instance.GetVirtualMachineIdFromSocket(hm.fs.basePath)
-		if err != nil {
-			continue
-		}
-		var ok bool
-		_, ok = hm.VirtualMachines[vmId]
-		if !ok {
-			hm.logger.Error("There is an instance running without a manifest", zap.String("path", hm.fs.GetManifestPath(instance.UnixSocketPath)))
-			continue
-		}
-		if vmId != hm.VirtualMachines[vmId].Manifest.GuestName {
-			continue
-		}
-		hm.VirtualMachines[vmId] = VirtualMachine{
-			PID:      &instance.PID,
-			Manifest: hm.VirtualMachines[vmId].Manifest,
-		}
-	}*/
 	return nil
 }
 
-func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinary *HypervisorBinary) error {
+func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinaryPath string, hypervisorBinary *HypervisorBinary) error {
 	var err error
 	var instances []*cloudhypervisor.CloudHypervisor
-	instances, err = LoadProcessData(hypervisorBinary)
+	instances, err = LoadProcessData(hypervisorBinaryPath)
 	if err != nil {
 		return err
 	}
 	for i := 0; i < len(instances); i++ {
-		// TODO:
-		// 1. Make HTTP call to instances to get vm info
-		// 2. Assign instances to correct vm based on platform UUID
+		var manifest cloudhypervisor.Manifest
+		var err error
+		res, err := instances[i].HttpClient.Get(*hypervisorBinary.GetUri(VirtualMachineAction(INFO)))
+		if err != nil {
+			return err
+		}
+		if res.StatusCode < 200 || res.StatusCode > 299 {
+			return errors.New("error while retrieving vm info")
+		}
+		resBody, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(resBody, &manifest)
+		if err != nil {
+			return err
+		}
+		var vm *virtualmachine.VirtualMachine
+		hm.vmsMu.Lock()
+		vm = hm.VirtualMachines[manifest.Platform.Uuid.String()]
+		hm.vmsMu.Unlock()
+		vm.AttachInstance(instances[i])
 	}
 	return nil
 }
-
-/*func GetVirtualMachineList() ([]*Manifest, error) {
-	var res []*Manifest = []*Manifest{}
-	entries, err := vmstorage.ListFolder(fs.basePath)
-	if err != nil {
-		return []*Manifest{}, err
-	}
-	for _, entry := range entries {
-		if !entry.IsFolder {
-			continue
-		}
-		manifest, err := vmstorage.ReadJson[*Manifest](fs.GetManifestPath(entry.Name))
-		if err != nil {
-			fs.logger.Error("Unable to read manifest from file", zap.String("path", fs.GetManifestPath(entry.Name)))
-		}
-		res = append(res, manifest)
-	}
-	return res, nil
-}*/

@@ -59,7 +59,7 @@ func parseProcFolder(cloudHypervisorPath string, pid int, procPath string, done 
 	done <- cloudhypervisor.LoadRunningInstance(pid, cmdSocketParsing.Path)
 }
 
-func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]*cloudhypervisor.CloudHypervisor, error) {
+func LoadProcessData(hypervisorBinaryPath string) ([]*cloudhypervisor.CloudHypervisor, error) {
 	// List all processes in /proc
 
 	var chanPool int = 20
@@ -102,7 +102,7 @@ func LoadProcessData(hypervisorBinary *HypervisorBinary) ([]*cloudhypervisor.Clo
 		}
 
 		if poolIndex < 20 {
-			go parseProcFolder(hypervisorBinary.BinaryPath, pid, "/proc/", procs)
+			go parseProcFolder(hypervisorBinaryPath, pid, "/proc/", procs)
 			index += 1
 			poolIndex += 1
 			continue

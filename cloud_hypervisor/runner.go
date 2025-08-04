@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"syscall"
 	"time"
+	vmnetworking "vmm/vm_networking"
 
 	"github.com/google/uuid"
 	"github.com/vishvananda/netlink"
@@ -16,7 +18,7 @@ import (
 
 type CloudHypervisor struct {
 	pid        int
-	httpClient *http.Client
+	HttpClient *http.Client
 }
 
 func CreateTransportSocket(socket string) *http.Client {
@@ -34,20 +36,34 @@ func CreateTransportSocket(socket string) *http.Client {
 }
 
 func NewCloudHypervisor(manifest *Manifest, binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
-
-	// TODO:
-	// 1. Create tap interfaces based on manifest networks and attach them to default bridge
-	// 2. Launch cloud-hypervisor instance as daemon
-	// 3. Return launched instance
-
+	var err error
 	socketUuid, err := uuid.NewUUID()
 	if err != nil {
 		return nil, errors.New("error while generating uuid for socket file")
 	}
 	var socketPath string = fmt.Sprintf("/tmp/vm-net-%s.sock", socketUuid)
-	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
-		httpClient: CreateTransportSocket(socketPath),
+
+	for i := 0; i < len(manifest.Net); i++ {
+		err = vmnetworking.CreateTapInterface(manifest.Net[i].Tap, defaultBridge)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	cmd := exec.Command(fmt.Sprintf("%s --api-socket path=%s", binaryPath, socketPath))
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setsid: true,
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
+		pid:        cmd.Process.Pid,
+		HttpClient: CreateTransportSocket(socketPath),
+	}
+
 	return cloudHypervisor, nil
 }
 
@@ -71,66 +87,7 @@ func (ch *CloudHypervisor) Kill(manifest *Manifest) error {
 func LoadRunningInstance(pid int, socketPath string) *CloudHypervisor {
 	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
 		pid:        pid,
-		httpClient: CreateTransportSocket(socketPath),
+		HttpClient: CreateTransportSocket(socketPath),
 	}
 	return cloudHypervisor
 }
-
-/*
-func (vm *VirtualMachine) Create() error {
-	master, err := vm.NetworkStack.GetDefaultBridge()
-	if err != nil {
-		return err
-	}
-	for i := 0; i < len(vm.Manifest.Net); i++ {
-		currentNet := vm.Manifest.Net[i]
-		interfaceName, err := vm.NetworkStack.GenereateDeviceName(&vmnetworking.NetworkIdentifier{
-			Ip:        currentNet.Address.IP,
-			Mask:      currentNet.Address.IPNet.Mask,
-			Tenant:    vm.Manifest.Tenant,
-			GuestName: vm.Manifest.GuestName,
-		})
-		if err != nil {
-			vm.Logger.Error("There was an error creating network interface name")
-			continue
-		}
-		err = vmnetworking.CreateTapInterface(*interfaceName.Tap, currentNet.Address.IP, currentNet.Address.IPNet.Mask, master)
-		if err != nil {
-			vm.Logger.Error("There was an error creating a tap interface",
-				zap.String("guest_vm", vm.Manifest.GuestName),
-				zap.String("ip", string(currentNet.Address.IP)),
-			)
-		}
-	}
-
-	cmd := exec.Command(vm.HypervisorBinary.GetLaunchCommandString(vm.FileSystemStorage.GetSocketPath(vm.Manifest.GuestName)))
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true,
-	}
-
-	if err := cmd.Start(); err != nil {
-		vm.Logger.Error("Unable to run process", zap.String("guest_name", vm.Manifest.GuestName))
-		return err
-	}
-	vm.PID = &cmd.Process.Pid
-
-	var uri *string = vm.HypervisorBinary.GetUri(CREATE)
-	if uri == nil {
-		vm.Logger.Error("Unknow URI", zap.String("action", "CREATE"))
-		return errors.New("unknow uri")
-	}
-	req, err := http.NewRequest("POST", *uri, nil)
-	if err != nil {
-		return err
-	}
-
-	resp, err := vm.HttpClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	return nil
-}
-*/

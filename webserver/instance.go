@@ -6,15 +6,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func Run(vmFileSystemStorage *vmm.FileSystemWrapper, vmmManager *vmm.HypervisorMonitor, socket string) {
+func Run(vmmManager *vmm.HypervisorMonitor, socket string) {
 	var e *echo.Echo = echo.New()
-	var virtualMachineUpload *VirtualMachineUpload = &VirtualMachineUpload{
-		VmFileSystemStorage: vmFileSystemStorage,
-	}
-	var virtualMachineManagerApi *VirtualMachineManagerApi = &VirtualMachineManagerApi{
-		fs:  vmFileSystemStorage,
-		vmm: vmmManager,
-	}
+	var virtualMachineUpload *VirtualMachineUpload = NewVirtualMachineUpload(vmmManager)
+	var virtualMachineManagerApi *VirtualMachineManagerApi = NewVirtualMachineManagerApi(vmmManager)
 
 	e.PUT("/api/v1/disk/upload/:filename/chunk", virtualMachineUpload.UploadChunk())
 	e.POST("/api/v1/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit())

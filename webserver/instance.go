@@ -17,6 +17,7 @@ func Run(vmmManager *vmm.HypervisorMonitor, socket string) {
 	e.GET("/api/vm/info", nil)
 	e.PUT("/api/vm/create", nil)
 	e.PUT("/api/vm/boot", nil)
+	e.PUT("/api/vm/shutdown", nil)
 	e.PUT("/api/vm/delete", nil)
 
 	e.PUT("/api/vmm/vm.metadata", virtualMachineManagerApi.UpdateVirtualMachine())

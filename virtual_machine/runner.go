@@ -61,7 +61,7 @@ func (vm *VirtualMachine) GetManifest() *Manifest {
 	return vm.manifest
 }
 
-func (vm *VirtualMachine) CreateDisk(diskName string) error {
+func (vm *VirtualMachine) CreateDisk(diskName string) (string, error) {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 	return vm.storage.CreateDisk(diskName)
@@ -71,6 +71,12 @@ func (vm *VirtualMachine) WriteChunkToDisk(diskName string, byteIndex int64, chu
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 	return vm.storage.WriteChunk(diskName, byteIndex, chunk)
+}
+
+func (vm *VirtualMachine) CommitDisk(tempDiskName string, diskName string) error {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+	return vm.storage.CommitDisk(tempDiskName, diskName)
 }
 
 func (vm *VirtualMachine) AttachInstance(hypervisor *cloudhypervisor.CloudHypervisor) {

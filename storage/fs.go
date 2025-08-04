@@ -137,23 +137,7 @@ func ListFolder(path string) ([]FolderEntry, error) {
 	return res, nil
 }
 
-/*
-func GetFullVirtualMachineList[T any]() ([]T, error) {
-	var res []T
-	folders, err := os.ReadDir(fs.basePath)
-	if err != nil {
-		return []FileContent{}, errors.New("unable to read from folder")
-	}
-	for i := 0; i < len(folders); i++ {
-		content, err := os.ReadFile(fs.GetManifestPath(folders[i].Name()))
-		if err != nil {
-			continue
-		}
-		res = append(res, FileContent{
-			Path:    fs.GetManifestPath(folders[i].Name()),
-			Content: content,
-		})
-	}
-	return res, nil
+func DeleteFile(path string) error {
+	err := os.Remove(path)
+	return err
 }
-*/

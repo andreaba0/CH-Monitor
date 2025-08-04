@@ -1,9 +1,13 @@
 package virtualmachine
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	vmstorage "vmm/storage"
+	"vmm/utils"
 
 	"go.uber.org/zap"
 )
@@ -42,14 +46,37 @@ func (fs *FileSystemWrapper) StoreManifest(manifest *Manifest) error {
 	return err
 }
 
-func (fs *FileSystemWrapper) CreateDisk(diskName string) error {
+// CreateDisk returns the name of a temporary file where it is possible to store chunks
+func (fs *FileSystemWrapper) CreateDisk(diskName string) (string, error) {
 	var err error = vmstorage.CreateFolderRec(fs.basePath)
+	if err != nil {
+		return "", err
+	}
+	randomString, err := utils.RandomString(16)
+	if err != nil {
+		return "", err
+	}
+	var tempFileName string = fmt.Sprintf("%s_%s.tmp", randomString, diskName)
+	err = vmstorage.CreateFile(fs.GetDiskPath(tempFileName))
+	if err != nil {
+		return "", err
+	}
+	return tempFileName, nil
+}
+
+func (fs *FileSystemWrapper) WriteChunk(tempDiskName string, byteIndex int64, chunk io.Reader) error {
+	return vmstorage.WriteFileChunk(fs.GetDiskPath(tempDiskName), byteIndex, chunk)
+}
+
+func (fs *FileSystemWrapper) CommitDisk(tempDiskName string, diskName string) error {
+	var randomString string = strings.Split(tempDiskName, "_")[0]
+	if fmt.Sprintf("%s_%s.tmp", randomString, diskName) != tempDiskName {
+		return errors.New("disk name and temporary disk name do not match")
+	}
+	var err error = vmstorage.RenameFile(fs.GetDiskPath(tempDiskName), fs.GetDiskPath(diskName))
 	if err != nil {
 		return err
 	}
-	return vmstorage.CreateFile(fs.GetDiskPath(diskName))
-}
-
-func (fs *FileSystemWrapper) WriteChunk(diskName string, byteIndex int64, chunk io.Reader) error {
-	return vmstorage.WriteFileChunk(fs.GetDiskPath(diskName), byteIndex, chunk)
+	err = vmstorage.DeleteFile(tempDiskName)
+	return err
 }

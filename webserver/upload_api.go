@@ -3,15 +3,19 @@ package webserver
 import (
 	"fmt"
 	"net/http"
-	vmstorage "vmm/storage"
+	virtualmachine "vmm/virtual_machine"
 	"vmm/vmm"
 
 	"github.com/labstack/echo/v4"
 )
 
-type DiskMetadata struct {
+type BeginBody struct {
 	VirtualMachine string `json:"virtual_machine" xml:"virtual_machine"`
-	ByteSize       int64  `json:"byte_size" xml:"byte_size"`
+}
+
+type CommitBody struct {
+	VirtualMachine string `json:"virtual_machine" xml:"virtual_machine"`
+	TmpDiskName    string `json:"tmp_disk_name" xml:"tmp_disk_name"`
 }
 
 type JsonResponse struct {
@@ -35,27 +39,45 @@ type VirtualMachineUploadService interface {
 	CreateVirtualMachine() echo.HandlerFunc
 }
 
-func (vmStorage *VirtualMachineUpload) CreateVirtualMachine() echo.HandlerFunc {
+func (vmStorage *VirtualMachineUpload) UploadBegin() echo.HandlerFunc {
 	return func(c echo.Context) error {
-		return nil
+		fileMetadata := new(BeginBody)
+		var err error
+		if c.Bind(fileMetadata); err != nil {
+			return c.String(http.StatusBadRequest, "Malformed request body")
+		}
+		var filename = c.Param("filename")
+		var vm *virtualmachine.VirtualMachine = vmStorage.vmm.GetVirtualMachine(fileMetadata.VirtualMachine)
+		if vm == nil {
+			return c.String(http.StatusNotFound, "Requested virtual machine is not found")
+		}
+		tmpDiskName, err := vm.CreateDisk(filename)
+		if err != nil {
+			return c.String(http.StatusBadRequest, "There was an error creating disk")
+		}
+		return c.JSON(http.StatusOK, JsonResponse{Message: tmpDiskName})
 	}
 }
 
 func (vmStorage *VirtualMachineUpload) UploadCommit() echo.HandlerFunc {
 	return func(c echo.Context) error {
-		fileMetadata := new(DiskMetadata)
+		fileMetadata := new(CommitBody)
 		var err error
 		if err = c.Bind(fileMetadata); err != nil {
 			return c.String(http.StatusBadRequest, "Provided request body does not fulfill requirements")
 		}
 		var filename = c.Param("filename")
-		var oldPath string = fmt.Sprintf("%s.tmp", vmStorage.VmFileSystemStorage.GetDiskPath(fileMetadata.VirtualMachine, filename))
-		var newPath string = vmStorage.VmFileSystemStorage.GetDiskPath(fileMetadata.VirtualMachine, filename)
-		err = vmstorage.RenameFile(oldPath, newPath)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, JsonResponse{Message: "Maybe file does not exists"})
+
+		var vm *virtualmachine.VirtualMachine = vmStorage.vmm.GetVirtualMachine(fileMetadata.VirtualMachine)
+		if vm == nil {
+			return c.String(http.StatusNotFound, "Virtual Machine is not found")
 		}
-		return c.String(http.StatusOK, "COMMIT")
+
+		err = vm.CommitDisk(fileMetadata.TmpDiskName, filename)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, JsonResponse{Message: "There was an error completing file upload"})
+		}
+		return c.JSON(http.StatusOK, JsonResponse{Message: "OK"})
 	}
 }
 
@@ -81,7 +103,12 @@ func (vmStorage *VirtualMachineUpload) UploadChunk() echo.HandlerFunc {
 			return c.JSON(http.StatusBadRequest, JsonResponse{Message: "Maybe Content-Range is in bad format. Required: <unit> <range start>-<range end>/<full size>"})
 		}
 
-		err = vmstorage.WriteFileChunk(vmStorage.VmFileSystemStorage.GetDiskPath(virtualMachine, filename), rangeStart, c.Request().Body)
+		var vm *virtualmachine.VirtualMachine = vmStorage.vmm.GetVirtualMachine(virtualMachine)
+		if vm == nil {
+			return c.String(http.StatusNotFound, "Virtual Machine is not found")
+		}
+
+		err = vm.WriteChunkToDisk(filename, rangeStart, c.Request().Body)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, JsonResponse{Message: "There was an error writing to file"})
 		}

@@ -11,6 +11,7 @@ func Run(vmmManager *vmm.HypervisorMonitor, socket string) {
 	var virtualMachineUpload *VirtualMachineUpload = NewVirtualMachineUpload(vmmManager)
 	var virtualMachineManagerApi *VirtualMachineManagerApi = NewVirtualMachineManagerApi(vmmManager)
 
+	e.PUT("/api/v1/disk/upload/:filename/chunk", virtualMachineUpload.UploadBegin())
 	e.PUT("/api/v1/disk/upload/:filename/chunk", virtualMachineUpload.UploadChunk())
 	e.POST("/api/v1/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit())
 

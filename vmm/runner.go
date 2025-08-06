@@ -14,15 +14,17 @@ import (
 )
 
 type HypervisorMonitor struct {
-	VirtualMachines map[string]*virtualmachine.VirtualMachine
+	virtualMachines map[string]*virtualmachine.VirtualMachine
 	vmsMu           sync.Mutex
 	logger          *zap.Logger
+	manifest        *Manifest
 }
 
 func NewHypervisorMonitor(logger *zap.Logger) *HypervisorMonitor {
 	return &HypervisorMonitor{
-		VirtualMachines: make(map[string]*virtualmachine.VirtualMachine),
+		virtualMachines: make(map[string]*virtualmachine.VirtualMachine),
 		logger:          logger,
+		manifest:        nil,
 	}
 }
 
@@ -33,6 +35,7 @@ func MonitorSetup(manifestPath string, vmm *HypervisorMonitor) error {
 	if err != nil {
 		return err
 	}
+	vmm.SetManifest(&manifest)
 	var binaryPath string = manifest.HypervisorPath
 	var remoteUri string = manifest.HypervisorSocketUri
 	var hypervisorBinary HypervisorBinary = *NewHypervisorBinary(remoteUri)
@@ -45,6 +48,10 @@ func MonitorSetup(manifestPath string, vmm *HypervisorMonitor) error {
 		return err
 	}
 	return nil
+}
+
+func (hm *HypervisorMonitor) SetManifest(manifest *Manifest) {
+	hm.manifest = manifest
 }
 
 func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
@@ -65,7 +72,7 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 			hm.logger.Error("Unable to read manifest from file", zap.String("base_path", basePath), zap.String("vm_id", entry.Name))
 		}
 		guestName := vm.GetManifest().GuestIdentifier
-		hm.VirtualMachines[guestName.String()] = vm
+		hm.virtualMachines[guestName.String()] = vm
 	}
 	return nil
 }
@@ -97,9 +104,28 @@ func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinaryPath string, 
 		}
 		var vm *virtualmachine.VirtualMachine
 		hm.vmsMu.Lock()
-		vm = hm.VirtualMachines[manifest.Platform.Uuid.String()]
+		vm = hm.virtualMachines[manifest.Platform.Uuid.String()]
 		hm.vmsMu.Unlock()
 		vm.AttachInstance(instances[i])
 	}
 	return nil
+}
+
+func (hm *HypervisorMonitor) CreateVirtualMachine(manifest *virtualmachine.Manifest) error {
+	hm.vmsMu.Lock()
+	defer hm.vmsMu.Unlock()
+	var err error
+	var vm *virtualmachine.VirtualMachine = virtualmachine.NewVirtualMachine(manifest, hm.logger, filepath.Join(hm.manifest.Server.StoragePath, manifest.GuestIdentifier.String()))
+	err = vm.StoreManifest()
+	if err != nil {
+		return err
+	}
+	hm.virtualMachines[manifest.GuestIdentifier.String()] = vm
+	return nil
+}
+
+func (hm *HypervisorMonitor) GetVirtualMachine(id string) *virtualmachine.VirtualMachine {
+	hm.vmsMu.Lock()
+	defer hm.vmsMu.Unlock()
+	return hm.virtualMachines[id]
 }

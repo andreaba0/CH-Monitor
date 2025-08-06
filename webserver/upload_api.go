@@ -9,6 +9,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+type UploadType int
+
+const (
+	KERNEL UploadType = iota
+	DISK
+)
+
 type BeginBody struct {
 	VirtualMachine string `json:"virtual_machine" xml:"virtual_machine"`
 }
@@ -39,7 +46,7 @@ type VirtualMachineUploadService interface {
 	CreateVirtualMachine() echo.HandlerFunc
 }
 
-func (vmStorage *VirtualMachineUpload) UploadBegin() echo.HandlerFunc {
+func (vmStorage *VirtualMachineUpload) UploadBegin(uploadType UploadType) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		fileMetadata := new(BeginBody)
 		var err error
@@ -51,11 +58,22 @@ func (vmStorage *VirtualMachineUpload) UploadBegin() echo.HandlerFunc {
 		if vm == nil {
 			return c.String(http.StatusNotFound, "Requested virtual machine is not found")
 		}
-		tmpDiskName, err := vm.CreateDisk(filename)
-		if err != nil {
-			return c.String(http.StatusBadRequest, "There was an error creating disk")
+
+		var tmpFileName string
+		if uploadType == UploadType(DISK) {
+			tmpFileName, err = vm.CreateDisk(filename)
+			if err != nil {
+				return c.String(http.StatusBadRequest, "There was an error creating disk")
+			}
+		} else if uploadType == UploadType(KERNEL) {
+			tmpFileName, err = vm.CreateKernel(filename)
+			if err != nil {
+				return c.String(http.StatusBadRequest, "There was an error creating kernel")
+			}
+		} else {
+			return c.String(http.StatusBadRequest, "Unknow file kind")
 		}
-		return c.JSON(http.StatusOK, JsonResponse{Message: tmpDiskName})
+		return c.JSON(http.StatusOK, JsonResponse{Message: tmpFileName})
 	}
 }
 

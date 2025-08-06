@@ -67,16 +67,34 @@ func (vm *VirtualMachine) CreateDisk(diskName string) (string, error) {
 	return vm.storage.CreateDisk(diskName)
 }
 
+func (vm *VirtualMachine) CreateKernel(kernelName string) (string, error) {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+	return vm.storage.CreateKernel(kernelName)
+}
+
 func (vm *VirtualMachine) WriteChunkToDisk(diskName string, byteIndex int64, chunk io.Reader) error {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
-	return vm.storage.WriteChunk(diskName, byteIndex, chunk)
+	return vm.storage.WriteDiskChunk(diskName, byteIndex, chunk)
+}
+
+func (vm *VirtualMachine) WriteChunkToKernel(kernelName string, byteIndex int64, chunk io.Reader) error {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+	return vm.storage.WriteKernelChunk(kernelName, byteIndex, chunk)
 }
 
 func (vm *VirtualMachine) CommitDisk(tempDiskName string, diskName string) error {
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 	return vm.storage.CommitDisk(tempDiskName, diskName)
+}
+
+func (vm *VirtualMachine) CommitKernel(tempKernelName string, kernelName string) error {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+	return vm.storage.CommitKernel(tempKernelName, kernelName)
 }
 
 func (vm *VirtualMachine) AttachInstance(hypervisor *cloudhypervisor.CloudHypervisor) {

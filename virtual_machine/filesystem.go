@@ -21,6 +21,14 @@ func (fs *FileSystemWrapper) GetManifestPath() string {
 	return filepath.Join(fs.basePath, "manifest.json")
 }
 
+func (fs *FileSystemWrapper) GetKernelPath(kernelName string) string {
+	return filepath.Join(fs.basePath, "kernel", kernelName)
+}
+
+func (fs *FileSystemWrapper) GetKernelStoragePath() string {
+	return filepath.Join(fs.basePath, "kernel")
+}
+
 func (fs *FileSystemWrapper) GetDiskPath(diskName string) string {
 	return filepath.Join(fs.basePath, "disks", diskName)
 }
@@ -46,37 +54,62 @@ func (fs *FileSystemWrapper) StoreManifest(manifest *Manifest) error {
 	return err
 }
 
-// CreateDisk returns the name of a temporary file where it is possible to store chunks
-func (fs *FileSystemWrapper) CreateDisk(diskName string) (string, error) {
-	var err error = vmstorage.CreateFolderRec(fs.basePath)
+func (fs *FileSystemWrapper) createFile(storagePath string, fileName string) (string, error) {
+	var err error = vmstorage.CreateFolderRec(storagePath)
 	if err != nil {
 		return "", err
 	}
+
 	randomString, err := utils.RandomString(16)
 	if err != nil {
 		return "", err
 	}
-	var tempFileName string = fmt.Sprintf("%s_%s.tmp", randomString, diskName)
-	err = vmstorage.CreateFile(fs.GetDiskPath(tempFileName))
+
+	var tmpFileName string = fmt.Sprintf("%s_%s.tmp", randomString, fileName)
+	err = vmstorage.CreateFile(filepath.Join(storagePath, tmpFileName))
 	if err != nil {
 		return "", err
 	}
-	return tempFileName, nil
+	return tmpFileName, nil
 }
 
-func (fs *FileSystemWrapper) WriteChunk(tempDiskName string, byteIndex int64, chunk io.Reader) error {
-	return vmstorage.WriteFileChunk(fs.GetDiskPath(tempDiskName), byteIndex, chunk)
+func (fs *FileSystemWrapper) CreateDisk(diskName string) (string, error) {
+	return fs.createFile(fs.GetDiskStoragePath(), diskName)
 }
 
-func (fs *FileSystemWrapper) CommitDisk(tempDiskName string, diskName string) error {
-	var randomString string = strings.Split(tempDiskName, "_")[0]
-	if fmt.Sprintf("%s_%s.tmp", randomString, diskName) != tempDiskName {
-		return errors.New("disk name and temporary disk name do not match")
-	}
-	var err error = vmstorage.RenameFile(fs.GetDiskPath(tempDiskName), fs.GetDiskPath(diskName))
+func (fs *FileSystemWrapper) CreateKernel(diskName string) (string, error) {
+	return fs.createFile(fs.GetKernelStoragePath(), diskName)
+}
+
+func (fs *FileSystemWrapper) writeChunk(fileFullPath string, byteIndex int64, chunk io.Reader) error {
+	return vmstorage.WriteFileChunk(fileFullPath, byteIndex, chunk)
+}
+
+func (fs *FileSystemWrapper) WriteDiskChunk(tmpDiskName string, byteIndex int64, chunk io.Reader) error {
+	return fs.writeChunk(fs.GetDiskPath(tmpDiskName), byteIndex, chunk)
+}
+
+func (fs *FileSystemWrapper) WriteKernelChunk(tmpKernelName string, byteIndex int64, chunk io.Reader) error {
+	return fs.writeChunk(fs.GetKernelPath(tmpKernelName), byteIndex, chunk)
+}
+
+func (fs *FileSystemWrapper) commitOperation(storagePath string, tmpFileName string, fileName string) error {
+	var err error = vmstorage.CreateFolderRec(storagePath)
 	if err != nil {
 		return err
 	}
-	err = vmstorage.DeleteFile(tempDiskName)
+	var randomString string = strings.Split(tmpFileName, "_")[0]
+	if fmt.Sprintf("%s_%s.tmp", randomString, fileName) != tmpFileName {
+		return errors.New("disk name and temporary disk name do not match")
+	}
+	err = vmstorage.RenameFile(filepath.Join(storagePath, tmpFileName), filepath.Join(storagePath, fileName))
 	return err
+}
+
+func (fs *FileSystemWrapper) CommitDisk(tmpDiskName string, diskName string) error {
+	return fs.commitOperation(fs.GetDiskStoragePath(), tmpDiskName, diskName)
+}
+
+func (fs *FileSystemWrapper) CommitKernel(tmpKernelName string, kernelName string) error {
+	return fs.commitOperation(fs.GetDiskStoragePath(), tmpKernelName, kernelName)
 }

@@ -11,9 +11,13 @@ func Run(vmmManager *vmm.HypervisorMonitor, socket string) {
 	var virtualMachineUpload *VirtualMachineUpload = NewVirtualMachineUpload(vmmManager)
 	var virtualMachineManagerApi *VirtualMachineManagerApi = NewVirtualMachineManagerApi(vmmManager)
 
-	e.PUT("/api/v1/disk/upload/:filename/chunk", virtualMachineUpload.UploadBegin())
-	e.PUT("/api/v1/disk/upload/:filename/chunk", virtualMachineUpload.UploadChunk())
-	e.POST("/api/v1/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit())
+	e.POST("/api/disk/upload/:filename/begin", virtualMachineUpload.UploadBegin(UploadType(DISK)))
+	e.PUT("/api/disk/upload/:filename/chunk", virtualMachineUpload.UploadChunk())
+	e.POST("/api/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit())
+
+	e.POST("/api/kernel/upload/:kernelname/begin", virtualMachineUpload.UploadBegin(UploadType(KERNEL)))
+	e.PUT("/api/kernel/upload/:kernelname/chunk", nil)
+	e.POST("/api/kernel/upload/:kernelname/commit", nil)
 
 	e.GET("/api/vm/info", nil)
 	e.PUT("/api/vm/create", nil)
@@ -21,8 +25,8 @@ func Run(vmmManager *vmm.HypervisorMonitor, socket string) {
 	e.PUT("/api/vm/shutdown", nil)
 	e.PUT("/api/vm/delete", nil)
 
-	e.PUT("/api/vmm/vm.metadata", virtualMachineManagerApi.UpdateVirtualMachine())
-	e.POST("/api/vmm/vm.metadata", virtualMachineManagerApi.CreateVirtualMachine())
+	e.PUT("/api/vmm/metadata", virtualMachineManagerApi.UpdateVirtualMachine())
+	e.POST("/api/vmm/metadata", virtualMachineManagerApi.CreateVirtualMachine())
 
 	e.Logger.Fatal(e.Start(socket))
 }

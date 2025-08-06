@@ -43,7 +43,7 @@ func (vmStorage *VirtualMachineUpload) UploadBegin() echo.HandlerFunc {
 	return func(c echo.Context) error {
 		fileMetadata := new(BeginBody)
 		var err error
-		if c.Bind(fileMetadata); err != nil {
+		if err = c.Bind(fileMetadata); err != nil {
 			return c.String(http.StatusBadRequest, "Malformed request body")
 		}
 		var filename = c.Param("filename")

@@ -22,7 +22,7 @@ func (vmmApi *VirtualMachineManagerApi) CreateVirtualMachine() echo.HandlerFunc 
 	return func(c echo.Context) error {
 		manifest := new(virtualmachine.Manifest)
 		var err error
-		if c.Bind(manifest); err != nil {
+		if err = c.Bind(manifest); err != nil {
 			return c.String(http.StatusBadRequest, "There was an error with request body")
 		}
 		err = vmmApi.vmm.CreateVirtualMachine(manifest)

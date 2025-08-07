@@ -12,12 +12,12 @@ func Run(vmmManager *vmm.HypervisorMonitor, socket string) {
 	var virtualMachineManagerApi *VirtualMachineManagerApi = NewVirtualMachineManagerApi(vmmManager)
 
 	e.POST("/api/disk/upload/:filename/begin", virtualMachineUpload.UploadBegin(UploadType(DISK)))
-	e.PUT("/api/disk/upload/:filename/chunk", virtualMachineUpload.UploadChunk())
-	e.POST("/api/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit())
+	e.PUT("/api/disk/upload/:filename/chunk", virtualMachineUpload.UploadChunk(UploadType(DISK)))
+	e.POST("/api/disk/upload/:filename/commit", virtualMachineUpload.UploadCommit(UploadType(DISK)))
 
 	e.POST("/api/kernel/upload/:kernelname/begin", virtualMachineUpload.UploadBegin(UploadType(KERNEL)))
-	e.PUT("/api/kernel/upload/:kernelname/chunk", nil)
-	e.POST("/api/kernel/upload/:kernelname/commit", nil)
+	e.PUT("/api/kernel/upload/:kernelname/chunk", virtualMachineUpload.UploadChunk(UploadType(KERNEL)))
+	e.POST("/api/kernel/upload/:kernelname/commit", virtualMachineUpload.UploadCommit(UploadType(KERNEL)))
 
 	e.GET("/api/vm/info", nil)
 	e.PUT("/api/vm/create", nil)

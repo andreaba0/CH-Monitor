@@ -22,7 +22,7 @@ type BeginBody struct {
 
 type CommitBody struct {
 	VirtualMachine string `json:"virtual_machine" xml:"virtual_machine"`
-	TmpDiskName    string `json:"tmp_disk_name" xml:"tmp_disk_name"`
+	TmpFileName    string `json:"tmp_file_name" xml:"tmp_file_name"`
 }
 
 type JsonResponse struct {
@@ -77,7 +77,7 @@ func (vmStorage *VirtualMachineUpload) UploadBegin(uploadType UploadType) echo.H
 	}
 }
 
-func (vmStorage *VirtualMachineUpload) UploadCommit() echo.HandlerFunc {
+func (vmStorage *VirtualMachineUpload) UploadCommit(uploadType UploadType) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		fileMetadata := new(CommitBody)
 		var err error
@@ -91,15 +91,24 @@ func (vmStorage *VirtualMachineUpload) UploadCommit() echo.HandlerFunc {
 			return c.String(http.StatusNotFound, "Virtual Machine is not found")
 		}
 
-		err = vm.CommitDisk(fileMetadata.TmpDiskName, filename)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, JsonResponse{Message: "There was an error completing file upload"})
+		if uploadType == UploadType(DISK) {
+			err = vm.CommitDisk(fileMetadata.TmpFileName, filename)
+			if err != nil {
+				return c.String(http.StatusBadRequest, "There was an error in disk commit")
+			}
+		} else if uploadType == UploadType(KERNEL) {
+			err = vm.CommitKernel(fileMetadata.TmpFileName, filename)
+			if err != nil {
+				return c.String(http.StatusBadRequest, "There was an error in kernel commit")
+			}
+		} else {
+			return c.String(http.StatusBadRequest, "Unknow file kind")
 		}
 		return c.JSON(http.StatusOK, JsonResponse{Message: "OK"})
 	}
 }
 
-func (vmStorage *VirtualMachineUpload) UploadChunk() echo.HandlerFunc {
+func (vmStorage *VirtualMachineUpload) UploadChunk(uploadType UploadType) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		var header http.Header
 		var filename string = c.Param("filename")
@@ -126,9 +135,18 @@ func (vmStorage *VirtualMachineUpload) UploadChunk() echo.HandlerFunc {
 			return c.String(http.StatusNotFound, "Virtual Machine is not found")
 		}
 
-		err = vm.WriteChunkToDisk(filename, rangeStart, c.Request().Body)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, JsonResponse{Message: "There was an error writing to file"})
+		if uploadType == UploadType(DISK) {
+			err = vm.WriteChunkToDisk(filename, rangeStart, c.Request().Body)
+			if err != nil {
+				return c.String(http.StatusBadRequest, "There was an error writing chunk to disk file")
+			}
+		} else if uploadType == UploadType(KERNEL) {
+			err = vm.WriteChunkToKernel(filename, rangeStart, c.Request().Body)
+			if err != nil {
+				return c.String(http.StatusBadRequest, "There was an error writing chunk to kernel file")
+			}
+		} else {
+			return c.String(http.StatusBadRequest, "Unknow file kind")
 		}
 
 		return c.JSON(http.StatusOK, JsonResponse{Message: "OK"})

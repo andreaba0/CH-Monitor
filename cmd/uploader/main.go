@@ -5,17 +5,23 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
 )
 
-type DiskMetadata struct {
+type BeginBody struct {
 	VirtualMachine string `json:"virtual_machine" xml:"virtual_machine"`
-	ByteSize       int64  `json:"byte_size" xml:"byte_size"`
+}
+
+type CommitBody struct {
+	VirtualMachine string `json:"virtual_machine" xml:"virtual_machine"`
+	TmpFileName    string `json:"tmp_file_name" xml:"tmp_file_name"`
 }
 
 func uploadChunk(filePath string, virtualMachine string, index int64, chunkSize int64, totalSize int64, remoteAddress string, httpClient *http.Client, done chan int) {
@@ -54,6 +60,7 @@ func uploadChunk(filePath string, virtualMachine string, index int64, chunkSize 
 		done <- 1
 		return
 	}
+	resp.Body.Close()
 
 	done <- 0
 
@@ -63,35 +70,19 @@ func composeUri(parts ...string) string {
 	var res string = ""
 	for _, part := range parts {
 		if res == "" {
-			res = part
+			res = strings.Trim(part, "/")
 			continue
 		}
-		if res[len(res)-1:] == "/" && part[0] == '/' {
-			res += part[1:]
-			continue
-		}
-		if res[len(res)-1:] != "/" && part[0] != '/' {
-			res += "/" + part
-			continue
-		}
-		res += part
+		res += "/" + strings.Trim(part, "/")
 	}
 	return res
 }
 
 func main() {
 	var filePath string
-	var err error
-	var fd *os.File
-	var fi os.FileInfo
-	var byteLength int64
 	var chunkSize int64 = 1024 * 1024 // 1 MB
-	var transport *http.Transport
-	var httpClient *http.Client
 	var remoteAddress string
 	var filename string
-	var resp *http.Response
-	var bar *progressbar.ProgressBar
 	var virtualMachine string
 
 	flag.StringVar(&filePath, "path", "", "File path to upload")
@@ -101,53 +92,60 @@ func main() {
 
 	flag.Parse()
 
-	transport = &http.Transport{
+	transport := &http.Transport{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10, // Number of reusable connections per host
 		IdleConnTimeout:     90 * time.Second,
 	}
 
-	httpClient = &http.Client{
+	httpClient := &http.Client{
 		Transport: transport,
 		Timeout:   10 * time.Second,
 	}
 
-	fd, err = os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
+	fd, err := os.OpenFile(filePath, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		log.Fatalf("Unable to open file %s", filePath)
 	}
 	defer fd.Close()
 
-	fi, err = fd.Stat()
+	fi, err := fd.Stat()
 	if err != nil {
 		log.Fatalf("Unable to get stats for file %s", filePath)
 	}
 
-	byteLength = fi.Size()
+	byteLength := fi.Size()
 
-	var jsonEncoded []byte
-	jsonEncoded, err = json.Marshal(DiskMetadata{
+	var beginBodyEncoded []byte
+	beginBodyEncoded, err = json.Marshal(BeginBody{
 		VirtualMachine: virtualMachine,
-		ByteSize:       byteLength,
 	})
 	if err != nil {
 		log.Fatal("Unable to create json body")
 	}
 
 	fmt.Printf("Init file upload %s\n", filePath)
-	resp, err = httpClient.Post(composeUri(remoteAddress, "/upload/", filename, "/begin"), "application/json", bytes.NewBuffer(jsonEncoded))
+	resp, err := httpClient.Post(composeUri(remoteAddress, "/upload/", filename, "/begin"), "application/json", bytes.NewBuffer(beginBodyEncoded))
 	if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if err != nil {
 			fmt.Printf("Error: %s\n", err.Error())
 		}
 		log.Fatalf("Failed to initialize upload")
 	}
+	defer resp.Body.Close()
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalf("Unable to parse response body")
+	}
+	tmpFileName := string(bodyBytes)
 
 	var i int64
 	var jobs int = 12
 	var job int
 	var done chan int = make(chan int, jobs)
-	bar = progressbar.Default(100, "Upload status")
+	bar := progressbar.Default(100, "Upload status")
+
+	// BUG: byteLength is not a multiple of chunkSize
 	var chunks int64 = byteLength / chunkSize
 
 	// This loop tries to keep the pool of jobs full
@@ -164,15 +162,24 @@ func main() {
 	}
 	for ; job > 0; job-- {
 		<-done
-		bar.Set((int)(i * 100 / byteLength))
+		bar.Set((int)(i * 100 / chunks))
 	}
 	bar.Set(100)
 
 	fmt.Printf("Finishing file upload %s\n", filePath)
-	resp, err = httpClient.Post(composeUri(remoteAddress, "/upload/", filename, "/commit"), "application/json", bytes.NewBuffer(jsonEncoded))
+	var commitBodyEncoded []byte
+	commitBodyEncoded, err = json.Marshal(CommitBody{
+		VirtualMachine: virtualMachine,
+		TmpFileName:    tmpFileName,
+	})
+	if err != nil {
+		log.Fatalf("Unable to encode json body")
+	}
+	resp, err = httpClient.Post(composeUri(remoteAddress, "/upload/", filename, "/commit"), "application/json", bytes.NewBuffer(commitBodyEncoded))
 	if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Fatalf("Unable to finish file upload %s", filePath)
 	}
+	defer resp.Body.Close()
 
 	os.Exit(0)
 }

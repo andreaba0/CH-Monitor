@@ -145,7 +145,6 @@ func main() {
 	var done chan int = make(chan int, jobs)
 	bar := progressbar.Default(100, "Upload status")
 
-	// BUG: byteLength is not a multiple of chunkSize
 	var chunks int64 = byteLength / chunkSize
 
 	// This loop tries to keep the pool of jobs full
@@ -159,6 +158,10 @@ func main() {
 			bar.Set((int)(i * 100 / chunks))
 			job -= 1
 		}
+	}
+	if chunkSize*chunks < byteLength {
+		job += 1
+		go uploadChunk(filePath, virtualMachine, chunkSize*chunks, byteLength-(chunkSize*chunks), byteLength, composeUri(remoteAddress, "/upload/", filename, "/chunk"), httpClient, done)
 	}
 	for ; job > 0; job-- {
 		<-done

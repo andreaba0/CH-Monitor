@@ -3,6 +3,7 @@ package virtualmachine
 import (
 	"errors"
 	"io"
+	"net"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
 	vmnetworking "vmm/vm_networking"
@@ -116,5 +117,46 @@ func (vm *VirtualMachine) AttachInstance(hypervisor *cloudhypervisor.CloudHyperv
 }
 
 func (vm *VirtualMachine) RunInstance() error {
+
+	// Steps:
+	// 1. Create cloud-hypervisor instance
+	// 2. Connect tap interfaces to bridges
+	// 3. Boot vm
+
+	for i := 0; i < len(vm.manifest.Config.Networks); i++ {
+		address := vm.manifest.Config.Networks[i]
+		ip, ipNet, err := net.ParseCIDR(address.Address)
+		if err != nil {
+			return err
+		}
+		tap, err := vm.networkManager.GetTapInterface(ip, ipNet.Mask, vm.manifest.Tenant.String())
+		if err != nil {
+			return err
+		}
+		err = vm.networkManager.ConnectTapToDefault(tap)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i := 0; i < len(vm.manifest.Config.Vpc); i++ {
+		address := vm.manifest.Config.Vpc[i]
+		ip, ipNet, err := net.ParseCIDR(address.Address)
+		if err != nil {
+			return err
+		}
+		tap, err := vm.networkManager.GetTapInterface(ip, ipNet.Mask, vm.manifest.Tenant.String())
+		if err != nil {
+			return err
+		}
+		bridge, err := vm.networkManager.GetAndCreateIfNotExistsVpc(*ipNet, vm.manifest.Tenant.String())
+		if err != nil {
+			return err
+		}
+		err = vm.networkManager.ConnectTapToVpc(tap, bridge)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

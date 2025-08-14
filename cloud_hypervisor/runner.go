@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/vishvananda/netlink"
 )
 
 type CloudHypervisor struct {
@@ -34,7 +33,7 @@ func CreateTransportSocket(socket string) *http.Client {
 	return client
 }
 
-func NewCloudHypervisor(manifest *Manifest, binaryPath string, defaultBridge netlink.Link) (*CloudHypervisor, error) {
+func NewCloudHypervisor(manifest *Manifest, binaryPath string) (*CloudHypervisor, error) {
 	var err error
 	socketUuid, err := uuid.NewUUID()
 	if err != nil {

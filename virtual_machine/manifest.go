@@ -22,6 +22,7 @@ func (manifest *Manifest) ParseToInstanceRequest() (*cloudhypervisor.Manifest, e
 type Config struct {
 	Networks []Net  `json:"networks" yaml:"networks"`
 	Disks    []Disk `json:"disks" yaml:"disks"`
+	Kernel   string `json:"kernel" yaml:"kernel"`
 	Vpc      []Net  `json:"vpc" yaml:"vpc"`
 }
 

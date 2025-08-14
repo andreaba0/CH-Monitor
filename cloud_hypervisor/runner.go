@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
-	vmnetworking "vmm/vm_networking"
 
 	"github.com/google/uuid"
 	"github.com/vishvananda/netlink"
@@ -44,10 +43,6 @@ func NewCloudHypervisor(manifest *Manifest, binaryPath string, defaultBridge net
 	var socketPath string = fmt.Sprintf("/tmp/vm-net-%s.sock", socketUuid)
 
 	for i := 0; i < len(manifest.Net); i++ {
-		err = vmnetworking.CreateTapInterface(manifest.Net[i].Tap, defaultBridge)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	cmd := exec.Command(fmt.Sprintf("%s --api-socket path=%s", binaryPath, socketPath))

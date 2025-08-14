@@ -67,7 +67,7 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 		if !entry.IsFolder {
 			continue
 		}
-		vm, err := virtualmachine.LoadVirtualMachine(filepath.Join(basePath, entry.Name), hm.logger)
+		vm, err := virtualmachine.LoadVirtualMachine(filepath.Join(basePath, entry.Name), hm.logger, hm.manifest.Bridge)
 		if err != nil {
 			hm.logger.Error("Unable to read manifest from file", zap.String("base_path", basePath), zap.String("vm_id", entry.Name))
 		}
@@ -115,7 +115,10 @@ func (hm *HypervisorMonitor) CreateVirtualMachine(manifest *virtualmachine.Manif
 	hm.vmsMu.Lock()
 	defer hm.vmsMu.Unlock()
 	var err error
-	var vm *virtualmachine.VirtualMachine = virtualmachine.NewVirtualMachine(manifest, hm.logger, filepath.Join(hm.manifest.Server.StoragePath, manifest.GuestIdentifier.String()))
+	vm, err := virtualmachine.NewVirtualMachine(manifest, hm.logger, filepath.Join(hm.manifest.Server.StoragePath, manifest.GuestIdentifier.String()), hm.manifest.Bridge)
+	if err != nil {
+		return err
+	}
 	err = vm.StoreManifest()
 	if err != nil {
 		return err

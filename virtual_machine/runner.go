@@ -5,19 +5,25 @@ import (
 	"io"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
+	vmnetworking "vmm/vm_networking"
 
 	"go.uber.org/zap"
 )
 
 type VirtualMachine struct {
-	manifest   *Manifest
-	hypervisor *cloudhypervisor.CloudHypervisor
-	storage    *FileSystemWrapper
-	logger     *zap.Logger
-	mu         sync.Mutex
+	manifest       *Manifest
+	hypervisor     *cloudhypervisor.CloudHypervisor
+	storage        *FileSystemWrapper
+	logger         *zap.Logger
+	mu             sync.Mutex
+	networkManager *vmnetworking.NetworkManager
 }
 
-func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, vmPath string) *VirtualMachine {
+func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, vmPath string, defaultBridge string) (*VirtualMachine, error) {
+	nm, err := vmnetworking.NewNetworkManager(defaultBridge)
+	if err != nil {
+		return nil, err
+	}
 	return &VirtualMachine{
 		manifest:   manifest,
 		hypervisor: nil,
@@ -25,12 +31,13 @@ func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, vmPath string) *V
 			basePath: vmPath,
 			logger:   logger,
 		},
-		logger: logger,
-	}
+		logger:         logger,
+		networkManager: nm,
+	}, nil
 
 }
 
-func LoadVirtualMachine(vmFolder string, logger *zap.Logger) (*VirtualMachine, error) {
+func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge string) (*VirtualMachine, error) {
 	var storage *FileSystemWrapper = &FileSystemWrapper{
 		basePath: vmFolder,
 		logger:   logger,
@@ -41,11 +48,16 @@ func LoadVirtualMachine(vmFolder string, logger *zap.Logger) (*VirtualMachine, e
 	if err != nil {
 		return nil, errors.New("unable to read manifest")
 	}
+	nm, err := vmnetworking.NewNetworkManager(defaultBridge)
+	if err != nil {
+		return nil, err
+	}
 	return &VirtualMachine{
-		manifest:   manifest,
-		hypervisor: nil,
-		storage:    storage,
-		logger:     logger,
+		manifest:       manifest,
+		hypervisor:     nil,
+		storage:        storage,
+		logger:         logger,
+		networkManager: nm,
 	}, nil
 }
 
@@ -101,4 +113,8 @@ func (vm *VirtualMachine) AttachInstance(hypervisor *cloudhypervisor.CloudHyperv
 	vm.mu.Lock()
 	defer vm.mu.Unlock()
 	vm.hypervisor = hypervisor
+}
+
+func (vm *VirtualMachine) RunInstance() error {
+	return nil
 }

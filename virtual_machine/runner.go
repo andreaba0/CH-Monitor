@@ -1,9 +1,12 @@
 package virtualmachine
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
+	"net/http"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
 	vmnetworking "vmm/vm_networking"
@@ -116,13 +119,100 @@ func (vm *VirtualMachine) AttachInstance(hypervisor *cloudhypervisor.CloudHyperv
 	vm.hypervisor = hypervisor
 }
 
-func (vm *VirtualMachine) RunInstance() error {
+func (vm *VirtualMachine) RunInstance(binaryPath string, remoteUri string) error {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+	if vm.hypervisor != nil {
+		return errors.New("an instance is already running")
+	}
+	cloudhypervisor, err := cloudhypervisor.NewCloudHypervisor(binaryPath, remoteUri)
+	if err != nil {
+		return err
+	}
+	vm.AttachInstance(cloudhypervisor)
+	return nil
+}
 
-	// Steps:
-	// 1. Create cloud-hypervisor instance
-	// 2. Connect tap interfaces to bridges
-	// 3. Boot vm
+func (vm *VirtualMachine) RequestBoot(binaryPath string, remoteUri string) error {
+	vm.mu.Lock()
+	defer vm.mu.Unlock()
+	if vm.hypervisor != nil {
+		return errors.New("virtual machine is already running")
+	}
+	hypervisor, err := cloudhypervisor.NewCloudHypervisor(binaryPath, remoteUri)
+	if err != nil {
+		return errors.New("there was an error running hypervisor instance")
+	}
+	vm.hypervisor = hypervisor
+	err = vm.createVirtualMachine()
+	if err != nil {
+		return errors.New("there was an error initializing the virtual machine")
+	}
+	err = vm.connectNetworking()
+	if err != nil {
+		return errors.New("there was an error connecting vm to network interfaces")
+	}
+	err = vm.bootVirtualMachine()
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
+func (vm *VirtualMachine) RequestShutdown() error {
+	err := vm.shutdownVirtualMachine()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (vm *VirtualMachine) createVirtualMachine() error {
+	var vmManifest *cloudhypervisor.Manifest = nil
+	var buf bytes.Buffer
+	err := json.NewEncoder(&buf).Encode(vmManifest)
+	if err != nil {
+		return err
+	}
+	uri, _ := vm.hypervisor.RestServer.GetUri(cloudhypervisor.CREATE)
+	req, err := http.NewRequest(http.MethodPut, uri, &buf)
+	if err != nil {
+		return err
+	}
+	res, err := vm.hypervisor.HttpClient.Do(req)
+	if err != nil || (res.StatusCode < 200 || res.StatusCode > 299) {
+		return err
+	}
+	return nil
+}
+
+func (vm *VirtualMachine) bootVirtualMachine() error {
+	uri, _ := vm.hypervisor.RestServer.GetUri(cloudhypervisor.BOOT)
+	req, err := http.NewRequest(http.MethodPut, uri, nil)
+	if err != nil {
+		return err
+	}
+	res, err := vm.hypervisor.HttpClient.Do(req)
+	if err != nil || (res.StatusCode < 200 || res.StatusCode > 299) {
+		return errors.New("there was an error performing http request")
+	}
+	return nil
+}
+
+func (vm *VirtualMachine) shutdownVirtualMachine() error {
+	uri, _ := vm.hypervisor.RestServer.GetUri(cloudhypervisor.SHUTDOWN)
+	req, err := http.NewRequest(http.MethodPut, uri, nil)
+	if err != nil {
+		return err
+	}
+	res, err := vm.hypervisor.HttpClient.Do(req)
+	if err != nil || (res.StatusCode < 200 || res.StatusCode > 299) {
+		return errors.New("there was an error performing http request")
+	}
+	return nil
+}
+
+func (vm *VirtualMachine) connectNetworking() error {
 	for i := 0; i < len(vm.manifest.Config.Networks); i++ {
 		address := vm.manifest.Config.Networks[i]
 		ip, ipNet, err := net.ParseCIDR(address.Address)

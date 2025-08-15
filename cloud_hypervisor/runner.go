@@ -17,6 +17,7 @@ import (
 type CloudHypervisor struct {
 	pid        int
 	HttpClient *http.Client
+	RestServer *HypervisorRestServer
 }
 
 func CreateTransportSocket(socket string) *http.Client {
@@ -33,16 +34,13 @@ func CreateTransportSocket(socket string) *http.Client {
 	return client
 }
 
-func NewCloudHypervisor(manifest *Manifest, binaryPath string) (*CloudHypervisor, error) {
+func NewCloudHypervisor(binaryPath string, remoteUri string) (*CloudHypervisor, error) {
 	var err error
 	socketUuid, err := uuid.NewUUID()
 	if err != nil {
 		return nil, errors.New("error while generating uuid for socket file")
 	}
 	var socketPath string = fmt.Sprintf("/tmp/vm-net-%s.sock", socketUuid)
-
-	for i := 0; i < len(manifest.Net); i++ {
-	}
 
 	cmd := exec.Command(fmt.Sprintf("%s --api-socket path=%s", binaryPath, socketPath))
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -56,12 +54,13 @@ func NewCloudHypervisor(manifest *Manifest, binaryPath string) (*CloudHypervisor
 	var cloudHypervisor *CloudHypervisor = &CloudHypervisor{
 		pid:        cmd.Process.Pid,
 		HttpClient: CreateTransportSocket(socketPath),
+		RestServer: NewHypervisorRestServer(remoteUri),
 	}
 
 	return cloudHypervisor, nil
 }
 
-func (ch *CloudHypervisor) Kill(manifest *Manifest) error {
+func (ch *CloudHypervisor) Kill() error {
 
 	// TODO:
 	// 1. Terminate current cloud-hypervisor instance

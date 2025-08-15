@@ -19,11 +19,11 @@ func Run(vmmManager *vmm.HypervisorMonitor, socket string) {
 	e.PUT("/api/kernel/upload/:kernelname/chunk", virtualMachineUpload.UploadChunk(UploadType(KERNEL)))
 	e.POST("/api/kernel/upload/:kernelname/commit", virtualMachineUpload.UploadCommit(UploadType(KERNEL)))
 
-	e.GET("/api/vm/info", nil)
-	e.PUT("/api/vm/create", nil)
-	e.PUT("/api/vm/boot", nil)
-	e.PUT("/api/vm/shutdown", nil)
-	e.PUT("/api/vm/delete", nil)
+	e.GET("/api/vm/:vm/info", nil)
+	e.PUT("/api/vm/:vm/create", nil)
+	e.PUT("/api/vm/:vm/boot", nil)
+	e.PUT("/api/vm/:vm/shutdown", nil)
+	e.PUT("/api/vm/:vm/delete", nil)
 
 	e.PUT("/api/vmm/metadata", virtualMachineManagerApi.UpdateVirtualMachine())
 	e.POST("/api/vmm/metadata", virtualMachineManagerApi.CreateVirtualMachine())

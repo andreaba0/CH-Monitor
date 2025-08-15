@@ -38,7 +38,7 @@ func MonitorSetup(manifestPath string, vmm *HypervisorMonitor) error {
 	vmm.SetManifest(&manifest)
 	var binaryPath string = manifest.HypervisorPath
 	var remoteUri string = manifest.HypervisorSocketUri
-	var hypervisorBinary HypervisorBinary = *NewHypervisorBinary(remoteUri)
+	var hypervisorBinary cloudhypervisor.HypervisorRestServer = *cloudhypervisor.NewHypervisorRestServer(remoteUri)
 	err = vmm.LoadVirtualMachines(manifest.Server.StoragePath)
 	if err != nil {
 		return err
@@ -77,7 +77,7 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 	return nil
 }
 
-func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinaryPath string, hypervisorBinary *HypervisorBinary) error {
+func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinaryPath string, hypervisorBinary *cloudhypervisor.HypervisorRestServer) error {
 	var err error
 	var instances []*cloudhypervisor.CloudHypervisor
 	instances, err = LoadProcessData(hypervisorBinaryPath)
@@ -87,7 +87,11 @@ func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinaryPath string, 
 	for i := 0; i < len(instances); i++ {
 		var manifest cloudhypervisor.Manifest
 		var err error
-		res, err := instances[i].HttpClient.Get(*hypervisorBinary.GetUri(VirtualMachineAction(INFO)))
+		uri, err := hypervisorBinary.GetUri(cloudhypervisor.VirtualMachineAction(cloudhypervisor.INFO))
+		if err != nil {
+			return err
+		}
+		res, err := instances[i].HttpClient.Get(uri)
 		if err != nil {
 			return err
 		}
@@ -131,4 +135,12 @@ func (hm *HypervisorMonitor) GetVirtualMachine(id string) *virtualmachine.Virtua
 	hm.vmsMu.Lock()
 	defer hm.vmsMu.Unlock()
 	return hm.virtualMachines[id]
+}
+
+func (hm *HypervisorMonitor) GetBinaryPath() string {
+	return hm.manifest.HypervisorPath
+}
+
+func (hm *HypervisorMonitor) GetRestServerUri() string {
+	return hm.manifest.HypervisorSocketUri
 }

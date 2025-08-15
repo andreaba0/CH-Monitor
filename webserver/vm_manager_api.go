@@ -33,6 +33,17 @@ func (vmmApi *VirtualMachineManagerApi) CreateVirtualMachine() echo.HandlerFunc 
 	}
 }
 
+func (vmmApi *VirtualMachineManagerApi) BootVirtualMachine() echo.HandlerFunc {
+	return func(c echo.Context) error {
+		vmId := c.Param("vm")
+		virtualMachine := vmmApi.vmm.GetVirtualMachine(vmId)
+		if virtualMachine == nil {
+			return c.String(http.StatusNotFound, "Virtual Machine is not found")
+		}
+		return nil
+	}
+}
+
 func (vmmApi *VirtualMachineManagerApi) UpdateVirtualMachine() echo.HandlerFunc {
 	return func(e echo.Context) error {
 		return nil

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -168,9 +169,12 @@ func (vm *VirtualMachine) RequestShutdown() error {
 }
 
 func (vm *VirtualMachine) createVirtualMachine() error {
-	var vmManifest *cloudhypervisor.Manifest = nil
+	vmManifest, err := vm.parseManifestToCloudHypervisor()
+	if err != nil {
+		return err
+	}
 	var buf bytes.Buffer
-	err := json.NewEncoder(&buf).Encode(vmManifest)
+	err = json.NewEncoder(&buf).Encode(vmManifest)
 	if err != nil {
 		return err
 	}
@@ -249,4 +253,49 @@ func (vm *VirtualMachine) connectNetworking() error {
 		}
 	}
 	return nil
+}
+
+func (vm *VirtualMachine) parseManifestToCloudHypervisor() (*cloudhypervisor.Manifest, error) {
+	chManifest := &cloudhypervisor.Manifest{
+		Cpus: cloudhypervisor.VmCpus{
+			Boot_vcpus: vm.manifest.Config.Cpus,
+			Max_vcpus:  vm.manifest.Config.Cpus,
+		},
+		Platform: cloudhypervisor.Platform{
+			Uuid: vm.manifest.GuestIdentifier.String(),
+		},
+		Rng: cloudhypervisor.Rng{
+			Src: vm.manifest.Config.Rng.Src,
+		},
+		Serial: cloudhypervisor.Serial{
+			Mode: "File",
+			File: fmt.Sprintf("/tmp/%s.log", vm.manifest.GuestIdentifier.String()),
+		},
+		Console: cloudhypervisor.Console{
+			Mode: "Off",
+		},
+	}
+	disks := []cloudhypervisor.Disk{}
+	for i := 0; i < len(vm.manifest.Config.Disks); i++ {
+		disks = append(disks, cloudhypervisor.Disk{
+			Path: vm.storage.GetDiskPath(vm.manifest.Config.Disks[i].Name),
+		})
+	}
+	chManifest.Disks = disks
+	if vm.manifest.Config.Kernel != "" && vm.manifest.Config.Init != "" {
+		chManifest.Payload = cloudhypervisor.Payload{
+			Kernel:  vm.storage.GetKernelPath(vm.manifest.Config.Kernel),
+			Cmdline: fmt.Sprintf("console=ttyS0 root=/dev/vda rw init=%s", vm.manifest.Config.Init),
+		}
+	}
+	nets := []cloudhypervisor.Net{}
+	for i := 0; i < len(vm.manifest.Config.Networks); i++ {
+		net, err := vm.manifest.Config.Networks[i].ParseToInstanceRequest()
+		if err != nil {
+			return nil, err
+		}
+		nets = append(nets, *net)
+	}
+	chManifest.Net = nets
+	return chManifest, nil
 }

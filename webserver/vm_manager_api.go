@@ -40,6 +40,7 @@ func (vmmApi *VirtualMachineManagerApi) BootVirtualMachine() echo.HandlerFunc {
 		if virtualMachine == nil {
 			return c.String(http.StatusNotFound, "Virtual Machine is not found")
 		}
+
 		return nil
 	}
 }

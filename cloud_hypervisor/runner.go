@@ -84,3 +84,7 @@ func LoadRunningInstance(pid int, socketPath string) *CloudHypervisor {
 	}
 	return cloudHypervisor
 }
+
+func (ch *CloudHypervisor) IsRunning() bool {
+	return ch.pid > 0
+}

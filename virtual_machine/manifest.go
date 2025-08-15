@@ -15,15 +15,18 @@ type Manifest struct {
 	Config          Config    `json:"hypervisor_config" yaml:"hypervisor_config"`
 }
 
-func (manifest *Manifest) ParseToInstanceRequest() (*cloudhypervisor.Manifest, error) {
-	return nil, nil
-}
-
 type Config struct {
 	Networks []Net  `json:"networks" yaml:"networks"`
 	Disks    []Disk `json:"disks" yaml:"disks"`
 	Kernel   string `json:"kernel" yaml:"kernel"`
+	Init     string `json:"init" yaml:"init"`
 	Vpc      []Net  `json:"vpc" yaml:"vpc"`
+	Rng      Rng    `json:"rng" yaml:"rng"`
+	Cpus     int    `json:"cpus" yaml:"cpus"`
+}
+
+type Rng struct {
+	Src string `json:"src" yaml:"src"`
 }
 
 type Net struct {
@@ -33,19 +36,16 @@ type Net struct {
 
 func (n *Net) ParseToInstanceRequest() (*cloudhypervisor.Net, error) {
 	if n.Address == "" || n.Mac == "" {
-		return nil, errors.New("properity not filled")
+		return nil, errors.New("property not filled")
 	}
 	ip, ipNet, err := net.ParseCIDR(n.Address)
 	if err != nil {
 		return nil, errors.New("there was an error parsing ip address")
 	}
 	var tap string = vmnetworking.GenerateTapName(ip, *ipNet)
-	var mask string = net.IP(ipNet.Mask).To4().String()
 	return &cloudhypervisor.Net{
-		Ip:   ip.To4().String(),
-		Mask: mask,
-		Mac:  n.Mac,
-		Tap:  tap,
+		Mac: n.Mac,
+		Tap: tap,
 	}, nil
 }
 

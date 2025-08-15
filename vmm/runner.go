@@ -108,7 +108,7 @@ func (hm *HypervisorMonitor) MergeRunningInstances(hypervisorBinaryPath string, 
 		}
 		var vm *virtualmachine.VirtualMachine
 		hm.vmsMu.Lock()
-		vm = hm.virtualMachines[manifest.Platform.Uuid.String()]
+		vm = hm.virtualMachines[manifest.Platform.Uuid]
 		hm.vmsMu.Unlock()
 		vm.AttachInstance(instances[i])
 	}

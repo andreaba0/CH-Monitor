@@ -17,7 +17,7 @@ type Platform struct {
 
 type VmCpus struct {
 	Boot_vcpus int `json:"boot_vcpus" yaml:"boot_vcpus"`
-	Max_vcpus  int `json:"max_vpcus" yaml:"max_vcpus"`
+	Max_vcpus  int `json:"max_vcpus" yaml:"max_vcpus"`
 }
 
 type Payload struct {
@@ -34,8 +34,8 @@ type Rng struct {
 }
 
 type Net struct {
-	Mac string `json:"mac" yaml:"mac"`
 	Tap string `json:"tap" yaml:"tap"`
+	Mac string `json:"mac" yaml:"mac"`
 }
 
 type Serial struct {

@@ -1,6 +1,8 @@
 package vmnetworking
 
 import (
+	"errors"
+	"fmt"
 	"net"
 	"reflect"
 	"strconv"
@@ -23,7 +25,7 @@ func NewNetworkManager(defaultBridge string) (*NetworkManager, error) {
 	}, nil
 }
 
-func (nm *NetworkManager) GenerateTapName(ip net.IP, mask net.IPMask, tenant string) string {
+func GenerateTapName(ip net.IP, mask net.IPMask, tenant string) string {
 	ones, _ := mask.Size()
 	ipStr := strings.Join(strings.Split(ip.String(), "."), "-")
 	tapNameParts := []string{
@@ -34,11 +36,6 @@ func (nm *NetworkManager) GenerateTapName(ip net.IP, mask net.IPMask, tenant str
 	}
 	tapName := strings.Join(tapNameParts, "-")
 	return tapName
-}
-
-func (nm *NetworkManager) GetTapInterface(ip net.IP, mask net.IPMask, tenant string) (netlink.Link, error) {
-	tapName := nm.GenerateTapName(ip, mask, tenant)
-	return netlink.LinkByName(tapName)
 }
 
 func (nm *NetworkManager) GenerateVpcName(network net.IPNet, tenant string) string {
@@ -78,4 +75,21 @@ func (nm *NetworkManager) GetAndCreateIfNotExistsVpc(network net.IPNet, tenant s
 		return nil, err
 	}
 	return link, nil
+}
+
+func ParseCIDR4(ipStr string, maskStr string) (net.IP, *net.IPNet, error) {
+	ip := net.ParseIP(ipStr)
+	if ip == nil || ip.To4() == nil {
+		return nil, nil, errors.New("expected an ipv4 address")
+	}
+	ipMask := net.ParseIP(maskStr)
+	if ipMask == nil || ipMask.To4() == nil {
+		return nil, nil, errors.New("expected an ipv4 mask")
+	}
+	mask := net.IPMask(ipMask.To4())
+	if mask == nil {
+		return nil, nil, errors.New("expected an ipv4 mask")
+	}
+	ones, _ := mask.Size()
+	return net.ParseCIDR(fmt.Sprintf("%s/%s", ip.To4().String(), strconv.Itoa(ones)))
 }

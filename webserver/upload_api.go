@@ -50,7 +50,7 @@ func (vmStorage *VirtualMachineUpload) UploadBegin(uploadType UploadType) echo.H
 	return func(c echo.Context) error {
 		fileMetadata := new(BeginBody)
 		var err error
-		if err = c.Bind(fileMetadata); err != nil {
+		if err = c.Bind(&fileMetadata); err != nil {
 			return c.String(http.StatusBadRequest, "Malformed request body")
 		}
 		var filename = c.Param("filename")
@@ -73,7 +73,7 @@ func (vmStorage *VirtualMachineUpload) UploadBegin(uploadType UploadType) echo.H
 		} else {
 			return c.String(http.StatusBadRequest, "Unknow file kind")
 		}
-		return c.JSON(http.StatusOK, JsonResponse{Message: tmpFileName})
+		return c.String(http.StatusCreated, tmpFileName)
 	}
 }
 

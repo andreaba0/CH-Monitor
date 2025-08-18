@@ -1,11 +1,6 @@
 package virtualmachine
 
 import (
-	"errors"
-	"net"
-	cloudhypervisor "vmm/cloud_hypervisor"
-	vmnetworking "vmm/vm_networking"
-
 	"github.com/google/uuid"
 )
 
@@ -16,37 +11,32 @@ type Manifest struct {
 }
 
 type Config struct {
-	Networks []Net  `json:"networks" yaml:"networks"`
-	Disks    []Disk `json:"disks" yaml:"disks"`
-	Kernel   string `json:"kernel" yaml:"kernel"`
-	Init     string `json:"init" yaml:"init"`
-	Vpc      []Net  `json:"vpc" yaml:"vpc"`
-	Rng      Rng    `json:"rng" yaml:"rng"`
-	Cpus     int    `json:"cpus" yaml:"cpus"`
+	Network DefaultNet `json:"networks" yaml:"networks"`
+	Disks   []Disk     `json:"disks" yaml:"disks"`
+	Kernel  string     `json:"kernel" yaml:"kernel"`
+	Init    string     `json:"init" yaml:"init"`
+	Vpc     []VpcNet   `json:"vpc" yaml:"vpc"`
+	Rng     Rng        `json:"rng" yaml:"rng"`
+	Cpus    int        `json:"cpus" yaml:"cpus"`
 }
 
 type Rng struct {
 	Src string `json:"src" yaml:"src"`
 }
 
-type Net struct {
-	Address string `json:"address" yaml:"address"`
-	Mac     string `json:"mac" yaml:"mac"`
+type DefaultNet struct {
+	Addresses []string `json:"addresses" yaml:"addresses"`
+	Mask      string   `json:"mask" yaml:"mask"`
+	Mac       string   `json:"mac" yaml:"mac"`
+	Tap       string   `json:"tap" yaml:"tap"`
 }
 
-func (n *Net) ParseToInstanceRequest() (*cloudhypervisor.Net, error) {
-	if n.Address == "" || n.Mac == "" {
-		return nil, errors.New("property not filled")
-	}
-	ip, ipNet, err := net.ParseCIDR(n.Address)
-	if err != nil {
-		return nil, errors.New("there was an error parsing ip address")
-	}
-	var tap string = vmnetworking.GenerateTapName(ip, *ipNet)
-	return &cloudhypervisor.Net{
-		Mac: n.Mac,
-		Tap: tap,
-	}, nil
+type VpcNet struct {
+	Addresses []string `json:"addresses" yaml:"addresses"`
+	Mask      string   `json:"mask" yaml:"mask"`
+	Mac       string   `json:"mac" yaml:"mac"`
+	Tap       string   `json:"tap" yaml:"tap"`
+	Bridge    string   `json:"bridge" yaml:"bridge"`
 }
 
 type Disk struct {

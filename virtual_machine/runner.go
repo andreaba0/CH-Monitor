@@ -6,26 +6,28 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
+	"path/filepath"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
-	vmnetworking "vmm/vm_networking"
+	"vmm/metadata"
 
+	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
 )
 
 type VirtualMachine struct {
-	manifest       *Manifest
-	hypervisor     *cloudhypervisor.CloudHypervisor
-	storage        *FileSystemWrapper
-	logger         *zap.Logger
-	mu             sync.Mutex
-	networkManager *vmnetworking.NetworkManager
+	manifest        *Manifest
+	hypervisor      *cloudhypervisor.CloudHypervisor
+	storage         *FileSystemWrapper
+	logger          *zap.Logger
+	mu              sync.Mutex
+	metadataManager *metadata.MetadataManager
+	defaultBridge   netlink.Link
 }
 
-func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, vmPath string, defaultBridge string) (*VirtualMachine, error) {
-	nm, err := vmnetworking.NewNetworkManager(defaultBridge)
+func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, storagePath string, defaultBridge string, metadataService *metadata.MetadataManager) (*VirtualMachine, error) {
+	bridgeLink, err := netlink.LinkByName(defaultBridge)
 	if err != nil {
 		return nil, err
 	}
@@ -33,36 +35,36 @@ func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, vmPath string, de
 		manifest:   manifest,
 		hypervisor: nil,
 		storage: &FileSystemWrapper{
-			basePath: vmPath,
+			basePath: filepath.Join(storagePath, manifest.GuestIdentifier.String()),
 			logger:   logger,
 		},
-		logger:         logger,
-		networkManager: nm,
+		logger:          logger,
+		metadataManager: metadataService,
+		defaultBridge:   bridgeLink,
 	}, nil
 
 }
 
-func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge string) (*VirtualMachine, error) {
+func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge string, metadataService *metadata.MetadataManager) (*VirtualMachine, error) {
+	bridgeLink, err := netlink.LinkByName(defaultBridge)
+	if err != nil {
+		return nil, err
+	}
 	var storage *FileSystemWrapper = &FileSystemWrapper{
 		basePath: vmFolder,
 		logger:   logger,
 	}
-	var err error
-	var manifest *Manifest
-	manifest, err = storage.ReadManifest()
+	manifest, err := storage.ReadManifest()
 	if err != nil {
 		return nil, errors.New("unable to read manifest")
 	}
-	nm, err := vmnetworking.NewNetworkManager(defaultBridge)
-	if err != nil {
-		return nil, err
-	}
 	return &VirtualMachine{
-		manifest:       manifest,
-		hypervisor:     nil,
-		storage:        storage,
-		logger:         logger,
-		networkManager: nm,
+		manifest:        manifest,
+		hypervisor:      nil,
+		storage:         storage,
+		logger:          logger,
+		metadataManager: metadataService,
+		defaultBridge:   bridgeLink,
 	}, nil
 }
 
@@ -142,20 +144,20 @@ func (vm *VirtualMachine) RequestBoot(binaryPath string, remoteUri string) error
 	}
 	hypervisor, err := cloudhypervisor.NewCloudHypervisor(binaryPath, remoteUri)
 	if err != nil {
-		return errors.New("there was an error running hypervisor instance")
+		return err
 	}
 	vm.hypervisor = hypervisor
 	err = vm.createVirtualMachine()
 	if err != nil {
-		return errors.New("there was an error initializing the virtual machine")
-	}
-	err = vm.connectNetworking()
-	if err != nil {
-		return errors.New("there was an error connecting vm to network interfaces")
+		return err
 	}
 	err = vm.bootVirtualMachine()
 	if err != nil {
 		return err
+	}
+	err = vm.connectNetworking()
+	if err != nil {
+		return errors.New("there was an error connecting vm to network interfaces")
 	}
 	return nil
 }
@@ -173,6 +175,13 @@ func (vm *VirtualMachine) createVirtualMachine() error {
 	if err != nil {
 		return err
 	}
+	arr, err := json.Marshal(vmManifest)
+	if err != nil {
+		return err
+	} else {
+		fmt.Print(string(arr))
+	}
+
 	var buf bytes.Buffer
 	err = json.NewEncoder(&buf).Encode(vmManifest)
 	if err != nil {
@@ -184,8 +193,16 @@ func (vm *VirtualMachine) createVirtualMachine() error {
 		return err
 	}
 	res, err := vm.hypervisor.HttpClient.Do(req)
-	if err != nil || (res.StatusCode < 200 || res.StatusCode > 299) {
+	if err != nil {
 		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		b, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		return errors.New(string(b))
 	}
 	return nil
 }
@@ -198,8 +215,17 @@ func (vm *VirtualMachine) bootVirtualMachine() error {
 	}
 	res, err := vm.hypervisor.HttpClient.Do(req)
 	if err != nil || (res.StatusCode < 200 || res.StatusCode > 299) {
-		return errors.New("there was an error performing http request")
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			return err
+		}
+		return errors.New(string(body))
 	}
+	defer res.Body.Close()
 	return nil
 }
 
@@ -217,7 +243,7 @@ func (vm *VirtualMachine) shutdownVirtualMachine() error {
 }
 
 func (vm *VirtualMachine) connectNetworking() error {
-	for i := 0; i < len(vm.manifest.Config.Networks); i++ {
+	/*for i := 0; i < len(vm.manifest.Config.Networks); i++ {
 		address := vm.manifest.Config.Networks[i]
 		ip, ipNet, err := net.ParseCIDR(address.Address)
 		if err != nil {
@@ -251,7 +277,7 @@ func (vm *VirtualMachine) connectNetworking() error {
 		if err != nil {
 			return err
 		}
-	}
+	}*/
 	return nil
 }
 
@@ -288,14 +314,5 @@ func (vm *VirtualMachine) parseManifestToCloudHypervisor() (*cloudhypervisor.Man
 			Cmdline: fmt.Sprintf("console=ttyS0 root=/dev/vda rw init=%s", vm.manifest.Config.Init),
 		}
 	}
-	nets := []cloudhypervisor.Net{}
-	for i := 0; i < len(vm.manifest.Config.Networks); i++ {
-		net, err := vm.manifest.Config.Networks[i].ParseToInstanceRequest()
-		if err != nil {
-			return nil, err
-		}
-		nets = append(nets, *net)
-	}
-	chManifest.Net = nets
 	return chManifest, nil
 }

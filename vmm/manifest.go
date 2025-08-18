@@ -2,16 +2,15 @@ package vmm
 
 import (
 	"errors"
-	"net"
 	vmstorage "vmm/storage"
 )
 
 type Manifest struct {
-	Bridge              string    `json:"bridge" yaml:"bridge"`
-	Server              Server    `json:"server" yaml:"server"`
-	Network             net.IPNet `json:"network" yaml:"network"`
-	HypervisorPath      string    `json:"hypervisor_path" yaml:"hypervisor_path"`
-	HypervisorSocketUri string    `json:"socket_uri" yaml:"socket_uri"`
+	Bridge               string `json:"bridge" yaml:"bridge"`
+	Server               Server `json:"server" yaml:"server"`
+	HypervisorPath       string `json:"hypervisor_path" yaml:"hypervisor_path"`
+	HypervisorSocketUri  string `json:"socket_uri" yaml:"socket_uri"`
+	InternalMetadataPath string `json:"metadata_path" yaml:"metadata_path"`
 }
 
 type Server struct {

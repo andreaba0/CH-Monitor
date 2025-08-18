@@ -87,7 +87,7 @@ func main() {
 
 	flag.StringVar(&filePath, "path", "", "File path to upload")
 	flag.StringVar(&virtualMachine, "virtual_machine", "", "Virtual machine id")
-	flag.StringVar(&remoteAddress, "host", "127.0.0.1", "url endpoint to upload file to")
+	flag.StringVar(&remoteAddress, "host", "http://127.0.0.1:8080", "url endpoint to upload file to")
 	flag.StringVar(&filename, "filename", "", "Name to assign on remote host")
 
 	flag.Parse()
@@ -150,7 +150,7 @@ func main() {
 	// This loop tries to keep the pool of jobs full
 	for i = 0; i < chunks; i++ {
 		job += 1
-		go uploadChunk(filePath, virtualMachine, chunkSize*i, chunkSize, byteLength, composeUri(remoteAddress, "/upload/", filename, "/chunk"), httpClient, done)
+		go uploadChunk(filePath, virtualMachine, chunkSize*i, chunkSize, byteLength, composeUri(remoteAddress, "/upload/", tmpFileName, "/chunk"), httpClient, done)
 
 		// If pool has reached the limit, wait for a job to finish
 		if job == jobs {
@@ -161,10 +161,13 @@ func main() {
 	}
 	if chunkSize*chunks < byteLength {
 		job += 1
-		go uploadChunk(filePath, virtualMachine, chunkSize*chunks, byteLength-(chunkSize*chunks), byteLength, composeUri(remoteAddress, "/upload/", filename, "/chunk"), httpClient, done)
+		go uploadChunk(filePath, virtualMachine, chunkSize*chunks, byteLength-(chunkSize*chunks), byteLength, composeUri(remoteAddress, "/upload/", tmpFileName, "/chunk"), httpClient, done)
 	}
 	for ; job > 0; job-- {
-		<-done
+		var res int = <-done
+		if res != 0 {
+			log.Fatal("There was an error uploading the chunk")
+		}
 		bar.Set((int)(i * 100 / chunks))
 	}
 	bar.Set(100)
@@ -180,7 +183,7 @@ func main() {
 	}
 	resp, err = httpClient.Post(composeUri(remoteAddress, "/upload/", filename, "/commit"), "application/json", bytes.NewBuffer(commitBodyEncoded))
 	if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		log.Fatalf("Unable to finish file upload %s", filePath)
+		log.Fatalf("Unable to finish file upload %s\n", filePath)
 	}
 	defer resp.Body.Close()
 

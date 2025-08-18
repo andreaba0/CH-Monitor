@@ -3,6 +3,7 @@ package cloudhypervisor
 import (
 	"errors"
 	"fmt"
+	"vmm/utils"
 )
 
 type VirtualMachineAction int
@@ -20,6 +21,7 @@ type HypervisorRestServer struct {
 }
 
 func NewHypervisorRestServer(remoteUri string) *HypervisorRestServer {
+	fmt.Printf("remote uri: %s\n", remoteUri)
 	return &HypervisorRestServer{
 		remoteUri: remoteUri,
 	}
@@ -28,15 +30,15 @@ func NewHypervisorRestServer(remoteUri string) *HypervisorRestServer {
 func (hb *HypervisorRestServer) GetUri(action VirtualMachineAction) (string, error) {
 	switch action {
 	case CREATE:
-		return fmt.Sprintf("%s/vm.create", hb.remoteUri), nil
+		return utils.JoinUri(hb.remoteUri, "/vm.create"), nil
 	case BOOT:
-		return fmt.Sprintf("%s/vm.boot", hb.remoteUri), nil
+		return utils.JoinUri(hb.remoteUri, "/vm.boot"), nil
 	case DELETE:
-		return fmt.Sprintf("%s/vm.delete", hb.remoteUri), nil
+		return utils.JoinUri(hb.remoteUri, "/vm.delete"), nil
 	case SHUTDOWN:
-		return fmt.Sprintf("%s/vm.shutdown", hb.remoteUri), nil
+		return utils.JoinUri(hb.remoteUri, "/vm.shutdown"), nil
 	case INFO:
-		return fmt.Sprintf("%s/vm.info", hb.remoteUri), nil
+		return utils.JoinUri(hb.remoteUri, "/vm.info"), nil
 	default:
 		return "", errors.New("unknow action")
 	}

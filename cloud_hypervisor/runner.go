@@ -20,6 +20,21 @@ type CloudHypervisor struct {
 	RestServer *HypervisorRestServer
 }
 
+func waitSocketFileCreation(socket string) error {
+	for i := 0; i < 50; i++ {
+		_, err := os.Stat(socket)
+		if err != nil && os.IsNotExist(err) {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return errors.New("wait for socket creation: time expired")
+}
+
 func CreateTransportSocket(socket string) *http.Client {
 	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return net.Dial("unix", socket)
@@ -42,12 +57,17 @@ func NewCloudHypervisor(binaryPath string, remoteUri string) (*CloudHypervisor, 
 	}
 	var socketPath string = fmt.Sprintf("/tmp/vm-net-%s.sock", socketUuid)
 
-	cmd := exec.Command(fmt.Sprintf("%s --api-socket path=%s", binaryPath, socketPath))
+	cmd := exec.Command(binaryPath, "--api-socket", fmt.Sprintf("path=%s", socketPath))
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
 	}
 
 	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	err = waitSocketFileCreation(socketPath)
+	if err != nil {
 		return nil, err
 	}
 

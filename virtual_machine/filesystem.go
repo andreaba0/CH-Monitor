@@ -50,6 +50,10 @@ func (fs *FileSystemWrapper) StoreManifest(manifest *Manifest) error {
 	if err != nil {
 		return err
 	}
+	err = vmstorage.CreateFileIfNotExists(fs.GetManifestPath())
+	if err != nil {
+		return err
+	}
 	err = vmstorage.WriteJson(fs.GetManifestPath(), manifest)
 	return err
 }
@@ -77,8 +81,8 @@ func (fs *FileSystemWrapper) CreateDisk(diskName string) (string, error) {
 	return fs.createFile(fs.GetDiskStoragePath(), diskName)
 }
 
-func (fs *FileSystemWrapper) CreateKernel(diskName string) (string, error) {
-	return fs.createFile(fs.GetKernelStoragePath(), diskName)
+func (fs *FileSystemWrapper) CreateKernel(kernelName string) (string, error) {
+	return fs.createFile(fs.GetKernelStoragePath(), kernelName)
 }
 
 func (fs *FileSystemWrapper) writeChunk(fileFullPath string, byteIndex int64, chunk io.Reader) error {
@@ -111,5 +115,5 @@ func (fs *FileSystemWrapper) CommitDisk(tmpDiskName string, diskName string) err
 }
 
 func (fs *FileSystemWrapper) CommitKernel(tmpKernelName string, kernelName string) error {
-	return fs.commitOperation(fs.GetDiskStoragePath(), tmpKernelName, kernelName)
+	return fs.commitOperation(fs.GetKernelStoragePath(), tmpKernelName, kernelName)
 }

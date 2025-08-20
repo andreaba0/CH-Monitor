@@ -9,8 +9,7 @@ import (
 	"strconv"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
-	"vmm/metadata"
-	vmstorage "vmm/storage"
+	storage "vmm/storage"
 	virtualmachine "vmm/virtual_machine"
 	vmnetworking "vmm/vm_networking"
 
@@ -18,23 +17,19 @@ import (
 )
 
 type HypervisorMonitor struct {
-	virtualMachines map[string]*virtualmachine.VirtualMachine
-	vmsMu           sync.Mutex
-	logger          *zap.Logger
-	manifest        *Manifest
-	metadata        *metadata.MetadataManager
-	vpc             map[string]map[string]string // vpc[ip/mask][tenant]=bridge_name
+	virtualMachines   map[string]*virtualmachine.VirtualMachine
+	vmsMu             sync.Mutex
+	logger            *zap.Logger
+	manifest          *Manifest
+	networkEnumerator *vmnetworking.NetworkEnumerator
 }
 
 func NewHypervisorMonitor(logger *zap.Logger, manifestPath string) (*HypervisorMonitor, error) {
-	manifest, err := vmstorage.ReadYaml[Manifest](manifestPath)
+	manifest, err := storage.ReadYaml[Manifest](manifestPath)
 	if err != nil {
 		return nil, err
 	}
-	metadataManager, err := metadata.NewMetadataManager(manifest.InternalMetadataPath)
-	if err != nil {
-		return nil, err
-	}
+	networkEnumerator := vmnetworking.NewNetworkEnumerator(manifest.InternalMetadataPath)
 	return &HypervisorMonitor{
 		virtualMachines: make(map[string]*virtualmachine.VirtualMachine),
 		logger:          logger,
@@ -65,7 +60,7 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 	hm.vmsMu.Lock()
 	defer hm.vmsMu.Unlock()
 	var err error
-	entries, err := vmstorage.ListFolder(basePath)
+	entries, err := storage.ListFolder(basePath)
 	if err != nil {
 		return err
 	}
@@ -151,16 +146,20 @@ func (hm *HypervisorMonitor) CreateVirtualMachine(manifest *virtualmachine.Manif
 		}
 		manifest.Config.Vpc[i].Tap = tapName
 		vpc := fmt.Sprintf("%s/%s", ipNet4, strconv.Itoa(ones))
+		fmt.Printf("vpc: %s\n", vpc)
+		if _, ok := hm.vpc[vpc]; !ok {
+			hm.vpc[vpc] = make(map[string]string)
+		}
 		if v, ok := hm.vpc[vpc][manifest.Tenant.String()]; ok {
 			manifest.Config.Vpc[i].Bridge = v
-			continue
+		} else {
+			bridge, err := hm.metadata.GetNewBridgeName()
+			if err != nil {
+				return err
+			}
+			hm.vpc[vpc][manifest.Tenant.String()] = bridge
+			manifest.Config.Vpc[i].Bridge = bridge
 		}
-		bridge, err := hm.metadata.GetNewBridgeName()
-		if err != nil {
-			return err
-		}
-		hm.vpc[vpc][manifest.Tenant.String()] = bridge
-		manifest.Config.Vpc[i].Bridge = bridge
 	}
 	tapName, err := hm.metadata.GetNewTapName()
 	if err != nil {

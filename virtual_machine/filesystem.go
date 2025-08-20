@@ -6,7 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
-	vmstorage "vmm/storage"
+	"vmm/storage"
 	"vmm/utils"
 
 	"go.uber.org/zap"
@@ -38,7 +38,7 @@ func (fs *FileSystemWrapper) GetDiskStoragePath() string {
 }
 
 func (fs *FileSystemWrapper) ReadManifest() (*Manifest, error) {
-	manifest, err := vmstorage.ReadJson[*Manifest](fs.GetManifestPath())
+	manifest, err := storage.ReadJson[*Manifest](fs.GetManifestPath())
 	if err != nil {
 		return nil, err
 	}
@@ -46,20 +46,20 @@ func (fs *FileSystemWrapper) ReadManifest() (*Manifest, error) {
 }
 
 func (fs *FileSystemWrapper) StoreManifest(manifest *Manifest) error {
-	var err error = vmstorage.CreateFolderRec(fs.basePath)
+	var err error = storage.CreateFolderRec(fs.basePath)
 	if err != nil {
 		return err
 	}
-	err = vmstorage.CreateFileIfNotExists(fs.GetManifestPath())
+	err = storage.CreateFileIfNotExists(fs.GetManifestPath())
 	if err != nil {
 		return err
 	}
-	err = vmstorage.WriteJson(fs.GetManifestPath(), manifest)
+	err = storage.WriteJson(fs.GetManifestPath(), manifest)
 	return err
 }
 
 func (fs *FileSystemWrapper) createFile(storagePath string, fileName string) (string, error) {
-	var err error = vmstorage.CreateFolderRec(storagePath)
+	var err error = storage.CreateFolderRec(storagePath)
 	if err != nil {
 		return "", err
 	}
@@ -70,7 +70,7 @@ func (fs *FileSystemWrapper) createFile(storagePath string, fileName string) (st
 	}
 
 	var tmpFileName string = fmt.Sprintf("%s_%s.tmp", randomString, fileName)
-	err = vmstorage.CreateFile(filepath.Join(storagePath, tmpFileName))
+	err = storage.CreateFile(filepath.Join(storagePath, tmpFileName))
 	if err != nil {
 		return "", err
 	}
@@ -86,7 +86,7 @@ func (fs *FileSystemWrapper) CreateKernel(kernelName string) (string, error) {
 }
 
 func (fs *FileSystemWrapper) writeChunk(fileFullPath string, byteIndex int64, chunk io.Reader) error {
-	return vmstorage.WriteFileChunk(fileFullPath, byteIndex, chunk)
+	return storage.WriteFileChunk(fileFullPath, byteIndex, chunk)
 }
 
 func (fs *FileSystemWrapper) WriteDiskChunk(tmpDiskName string, byteIndex int64, chunk io.Reader) error {
@@ -98,7 +98,7 @@ func (fs *FileSystemWrapper) WriteKernelChunk(tmpKernelName string, byteIndex in
 }
 
 func (fs *FileSystemWrapper) commitOperation(storagePath string, tmpFileName string, fileName string) error {
-	var err error = vmstorage.CreateFolderRec(storagePath)
+	var err error = storage.CreateFolderRec(storagePath)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func (fs *FileSystemWrapper) commitOperation(storagePath string, tmpFileName str
 	if fmt.Sprintf("%s_%s.tmp", randomString, fileName) != tmpFileName {
 		return errors.New("disk name and temporary disk name do not match")
 	}
-	err = vmstorage.RenameFile(filepath.Join(storagePath, tmpFileName), filepath.Join(storagePath, fileName))
+	err = storage.RenameFile(filepath.Join(storagePath, tmpFileName), filepath.Join(storagePath, fileName))
 	return err
 }
 

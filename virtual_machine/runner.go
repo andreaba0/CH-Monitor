@@ -10,23 +10,23 @@ import (
 	"path/filepath"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
-	"vmm/metadata"
+	vmnetworking "vmm/vm_networking"
 
 	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
 )
 
 type VirtualMachine struct {
-	manifest        *Manifest
-	hypervisor      *cloudhypervisor.CloudHypervisor
-	storage         *FileSystemWrapper
-	logger          *zap.Logger
-	mu              sync.Mutex
-	metadataManager *metadata.MetadataManager
-	defaultBridge   netlink.Link
+	manifest          *Manifest
+	hypervisor        *cloudhypervisor.CloudHypervisor
+	storage           *FileSystemWrapper
+	logger            *zap.Logger
+	mu                sync.Mutex
+	networkEnumerator *vmnetworking.NetworkEnumerator
+	defaultBridge     netlink.Link
 }
 
-func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, storagePath string, defaultBridge string, metadataService *metadata.MetadataManager) (*VirtualMachine, error) {
+func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, storagePath string, defaultBridge string, networkEnumerator *vmnetworking.NetworkEnumerator) (*VirtualMachine, error) {
 	bridgeLink, err := netlink.LinkByName(defaultBridge)
 	if err != nil {
 		return nil, err
@@ -38,14 +38,14 @@ func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, storagePath strin
 			basePath: filepath.Join(storagePath, manifest.GuestIdentifier.String()),
 			logger:   logger,
 		},
-		logger:          logger,
-		metadataManager: metadataService,
-		defaultBridge:   bridgeLink,
+		logger:            logger,
+		networkEnumerator: networkEnumerator,
+		defaultBridge:     bridgeLink,
 	}, nil
 
 }
 
-func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge string, metadataService *metadata.MetadataManager) (*VirtualMachine, error) {
+func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge string, networkEnumerator *vmnetworking.NetworkEnumerator) (*VirtualMachine, error) {
 	bridgeLink, err := netlink.LinkByName(defaultBridge)
 	if err != nil {
 		return nil, err
@@ -59,12 +59,12 @@ func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge strin
 		return nil, errors.New("unable to read manifest")
 	}
 	return &VirtualMachine{
-		manifest:        manifest,
-		hypervisor:      nil,
-		storage:         storage,
-		logger:          logger,
-		metadataManager: metadataService,
-		defaultBridge:   bridgeLink,
+		manifest:          manifest,
+		hypervisor:        nil,
+		storage:           storage,
+		logger:            logger,
+		networkEnumerator: networkEnumerator,
+		defaultBridge:     bridgeLink,
 	}, nil
 }
 

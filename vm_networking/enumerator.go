@@ -1,4 +1,4 @@
-package metadata
+package vmnetworking
 
 import (
 	"fmt"
@@ -8,22 +8,19 @@ import (
 	vmstorage "vmm/storage"
 )
 
-type MetadataManager struct {
-	tapCounter    int
-	bridgeCounter int
+type NetworkEnumerator struct {
+	tapCounter    uint32
+	bridgeCounter uint32
 	tapPrefix     string
 	bridgePrefix  string
-	snapshot_path string
 	mu            sync.Mutex
+	snapshot_path string
 }
 
-func NewMetadataManager(snapshot_path string) (*MetadataManager, error) {
-	manifest, err := vmstorage.ReadJson[*Manifest](snapshot_path)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
+func NewNetworkEnumerator(snapshot_path string) (*NetworkEnumerator, error) {
+	manifest, err := vmstorage.ReadJson[Manifest](snapshot_path)
 	if err == nil {
-		return &MetadataManager{
+		return &NetworkEnumerator{
 			tapCounter:    manifest.TapCounter,
 			bridgeCounter: manifest.BridgeCounter,
 			tapPrefix:     manifest.TapPrefix,
@@ -31,16 +28,19 @@ func NewMetadataManager(snapshot_path string) (*MetadataManager, error) {
 			snapshot_path: snapshot_path,
 		}, nil
 	}
-	return &MetadataManager{
-		tapCounter:    0,
-		bridgeCounter: 0,
-		tapPrefix:     "tapch",
-		bridgePrefix:  "brvpc",
-		snapshot_path: snapshot_path,
-	}, nil
+	if os.IsNotExist(err) {
+		return &NetworkEnumerator{
+			tapCounter:    0,
+			bridgeCounter: 0,
+			tapPrefix:     "tapch",
+			bridgePrefix:  "brvpc",
+			snapshot_path: snapshot_path,
+		}, nil
+	}
+	return nil, err
 }
 
-func (mm *MetadataManager) doSnapshot() error {
+func (mm *NetworkEnumerator) doSnapshot() error {
 	manifest := Manifest{
 		TapCounter:    mm.tapCounter,
 		BridgeCounter: mm.bridgeCounter,
@@ -50,16 +50,16 @@ func (mm *MetadataManager) doSnapshot() error {
 	return vmstorage.WriteJson(mm.snapshot_path, &manifest)
 }
 
-func (mm *MetadataManager) MakeSnapshot() error {
+func (mm *NetworkEnumerator) MakeSnapshot() error {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
 	return mm.doSnapshot()
 }
 
-func (mm *MetadataManager) GetNewTapName() (string, error) {
+func (mm *NetworkEnumerator) GetNewTapName() (string, error) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	tapName := fmt.Sprintf("%s-%s", mm.tapPrefix, strconv.Itoa(mm.tapCounter+1))
+	tapName := fmt.Sprintf("%s%s", mm.tapPrefix, strconv.FormatUint(uint64(mm.tapCounter+1), 10))
 	err := mm.doSnapshot()
 	if err != nil {
 		return "", err
@@ -68,10 +68,10 @@ func (mm *MetadataManager) GetNewTapName() (string, error) {
 	return tapName, nil
 }
 
-func (mm *MetadataManager) GetNewBridgeName() (string, error) {
+func (mm *NetworkEnumerator) GetNewBridgeName() (string, error) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	bridgeName := fmt.Sprintf("%s-%s", mm.bridgePrefix, strconv.Itoa(mm.bridgeCounter+1))
+	bridgeName := fmt.Sprintf("%s%s", mm.bridgePrefix, strconv.FormatUint(uint64(mm.bridgeCounter+1), 10))
 	err := mm.doSnapshot()
 	if err != nil {
 		return "", err

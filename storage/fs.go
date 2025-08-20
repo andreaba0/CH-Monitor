@@ -1,4 +1,4 @@
-package vmstorage
+package storage
 
 import (
 	"encoding/json"
@@ -9,10 +9,7 @@ import (
 )
 
 func CreateFile(path string) error {
-	var err error
-	var fd *os.File
-
-	fd, err = os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -21,10 +18,7 @@ func CreateFile(path string) error {
 }
 
 func CreateFileIfNotExists(filePath string) error {
-	var err error
-	var fd *os.File
-
-	fd, err = os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.ModePerm)
+	fd, err := os.OpenFile(filePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -33,9 +27,7 @@ func CreateFileIfNotExists(filePath string) error {
 }
 
 func WriteFileChunk(path string, byteIndex int64, chunk io.Reader) error {
-	var err error
-	var fd *os.File
-	fd, err = os.OpenFile(path, os.O_WRONLY, os.ModePerm)
+	fd, err := os.OpenFile(path, os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -53,16 +45,27 @@ func WriteFileChunk(path string, byteIndex int64, chunk io.Reader) error {
 	return nil
 }
 
+func ReadFileChunk(path string, byteIndex int64, len int) ([]byte, error) {
+	fd, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	blob := make([]byte, len)
+	n, err := fd.ReadAt(blob, byteIndex)
+	if err != nil {
+		return nil, err
+	}
+	return blob[:n], nil
+}
+
 func RenameFile(oldPath string, newPath string) error {
-	var err error = os.Rename(oldPath, newPath)
-	return err
+	return os.Rename(oldPath, newPath)
 }
 
 func ReadYaml[T any](path string) (T, error) {
 	var res T
-	var err error
-	var dataByte []byte = []byte{}
-	dataByte, err = os.ReadFile(path)
+	dataByte, err := os.ReadFile(path)
 	if err != nil {
 		return res, err
 	}
@@ -75,9 +78,7 @@ func ReadYaml[T any](path string) (T, error) {
 
 func ReadJson[T any](path string) (T, error) {
 	var res T
-	var err error
-	var dataByte []byte = []byte{}
-	dataByte, err = os.ReadFile(path)
+	dataByte, err := os.ReadFile(path)
 	if err != nil {
 		return res, err
 	}
@@ -89,14 +90,11 @@ func ReadJson[T any](path string) (T, error) {
 }
 
 func WriteJson[T any](path string, content T) error {
-	var err error
-	var dataByte []byte
-	var fd *os.File
-	dataByte, err = json.Marshal(content)
+	dataByte, err := json.Marshal(content)
 	if err != nil {
 		return err
 	}
-	fd, err = os.OpenFile(path, os.O_WRONLY, 0)
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0)
 	if err != nil {
 		return err
 	}
@@ -106,8 +104,7 @@ func WriteJson[T any](path string, content T) error {
 }
 
 func CreateFolderRec(path string) error {
-	var err error = os.MkdirAll(path, os.ModePerm)
-	return err
+	return os.MkdirAll(path, os.ModePerm)
 }
 
 type FolderEntry struct {
@@ -138,6 +135,5 @@ func ListFolder(path string) ([]FolderEntry, error) {
 }
 
 func DeleteFile(path string) error {
-	err := os.Remove(path)
-	return err
+	return os.Remove(path)
 }

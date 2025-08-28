@@ -2,33 +2,38 @@ package networkvpc
 
 import (
 	"errors"
-	"path/filepath"
+	"net"
 	"sync"
 	storage "vmm/storage"
+
+	"github.com/google/uuid"
 )
 
 const (
-	ADD_NETWORK = iota
+	EOF = iota
+	ADD_NETWORK
 	DELETE_NETWORK
 	DELETE_TENANT
 )
 
 type BlobData interface {
-	Parse(blob []byte, index uint64) error
+	Parse(blob []byte, index int) error
 	Row() []byte
-	GetNextRow() uint64
+	GetRowSize() int
 }
 
 type VpcManager struct {
-	storagePath string
-	database    map[string]map[string]string
-	mu          sync.Mutex
+	snapshotPath string
+	changesPath  string
+	database     map[string]map[string]string
+	mu           sync.Mutex
 }
 
-func NewVpcManager(storagePath string) *VpcManager {
+func NewVpcManager(snapshotPath string, changesPath string) *VpcManager {
 	return &VpcManager{
-		storagePath: storagePath,
-		database:    make(map[string]map[string]string),
+		snapshotPath: snapshotPath,
+		changesPath:  changesPath,
+		database:     make(map[string]map[string]string),
 	}
 }
 
@@ -54,11 +59,11 @@ func (vpcManager *VpcManager) LoadFromStorage(storagePath string) error {
 }
 
 func (vpcManager *VpcManager) GetLogFilePath() string {
-	return filepath.Join(vpcManager.storagePath, "changes.aof")
+	return vpcManager.changesPath
 }
 
 func (vpcManager *VpcManager) GetSnapshotFilePath() string {
-	return filepath.Join(vpcManager.storagePath, "registry.bin")
+	return vpcManager.snapshotPath
 }
 
 // This method stores the main datastructure in filesystem and clears AOF file
@@ -76,31 +81,85 @@ func (vpcManager *VpcManager) doSnapshot() error {
 
 func (vpcManager *VpcManager) readChangesFile() error {
 	var index int64 = 0
-	var blobSize int = 256
+	cache := NewChunkCache(vpcManager.GetLogFilePath(), 512)
 	for {
-		blob, err := storage.ReadFileChunk(vpcManager.GetLogFilePath(), index, blobSize)
+		buffer := cache.GetBuffered(index)
+		if cache.BufferAndIndexAreAtEndOfFile(index) {
+			break
+		}
+		data, err := vpcManager.getNextRow(buffer, index)
 		if err != nil {
-			return err
+			if errors.Is(err, &ErrNotEnoughBytes{}) {
+				cache.SlideBufferToIndex(index)
+				continue
+			} else {
+				return err
+			}
 		}
-		var data BlobData
-		switch blob[0] {
-		case ADD_NETWORK:
-			data = new(AddNetwork)
-		case DELETE_NETWORK:
-			data = new(DeleteNetwork)
-		case DELETE_TENANT:
-			data = new(DeleteTenant)
-		default:
-			data = nil
+		index += int64(data.GetRowSize())
+		if obj, ok := data.(*AddNetwork); ok {
+			vpcManager.addNetwork(obj, false)
+			continue
 		}
-		if data == nil {
-			return errors.New("unknow data type found")
-		}
-		err = data.Parse(blob, uint64(index))
-		if err != nil {
-			return err
-		}
-
+		return errors.New("unknow data type found")
 	}
 	return nil
+}
+
+func (vpcManager *VpcManager) getNextRow(buffer []byte, index int64) (BlobData, error) {
+	localIndex := index % int64(len(buffer))
+	var data BlobData
+	switch buffer[localIndex] {
+	case ADD_NETWORK:
+		data = new(AddNetwork)
+	case DELETE_NETWORK:
+		data = new(DeleteNetwork)
+	case DELETE_TENANT:
+		data = new(DeleteTenant)
+	default:
+		return nil, errors.New("unknow data type")
+	}
+	err := data.Parse(buffer, int(localIndex))
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (vpcManager *VpcManager) addNetwork(an *AddNetwork, store bool) error {
+	network, err := an.GetNetworkString()
+	if err != nil {
+		return err
+	}
+	bridge := an.GetBridgeNumber()
+	if _, ok := vpcManager.database[an.GetTenant()]; !ok {
+		vpcManager.database[an.GetTenant()] = make(map[string]string)
+	}
+	if v, ok := vpcManager.database[an.GetTenant()][network]; ok {
+		if v != bridge {
+			return errors.New("mismatch in bridge name for a tenant")
+		}
+	} else {
+		vpcManager.database[an.GetTenant()][network] = bridge
+	}
+	if store == true {
+		_ = an.Row()
+	}
+	return nil
+}
+
+func (vpcManager *VpcManager) deleteNetwork(dn *DeleteNetwork, store bool) error {
+	return nil
+}
+
+func (vpcManager *VpcManager) deleteTenant(dt *DeleteTenant, store bool) error {
+	return nil
+}
+
+func (vpcManager *VpcManager) AddNetwork(tenant uuid.UUID, network net.IPNet, bridge string) error {
+	vpcManager.mu.Lock()
+	defer vpcManager.mu.Unlock()
+	addNetwork := NewAddNetwork(tenant, network, bridge)
+	err := vpcManager.addNetwork(addNetwork, true)
+	return err
 }

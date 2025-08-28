@@ -1,7 +1,6 @@
 package networkvpc
 
 import (
-	"errors"
 	"net"
 
 	"github.com/google/uuid"
@@ -11,7 +10,6 @@ type DeleteNetwork struct {
 	action  byte
 	tenant  uuid.UUID
 	network net.IPNet
-	nextRow uint64
 }
 
 func NewDeleteNetwork(tenant uuid.UUID, network net.IPNet) *DeleteNetwork {
@@ -22,9 +20,9 @@ func NewDeleteNetwork(tenant uuid.UUID, network net.IPNet) *DeleteNetwork {
 	}
 }
 
-func (deleteNetwork *DeleteNetwork) Parse(blob []byte, index uint64) error {
-	if uint64(len(blob)) < index+1+16+5 {
-		return errors.New("not enough bytes")
+func (deleteNetwork *DeleteNetwork) Parse(blob []byte, index int) error {
+	if len(blob) < index+1+16+5 {
+		return &ErrNotEnoughBytes{}
 	}
 	tenant, err := uuid.ParseBytes(blob[index+1 : index+1+16])
 	if err != nil {
@@ -32,7 +30,6 @@ func (deleteNetwork *DeleteNetwork) Parse(blob []byte, index uint64) error {
 	}
 	deleteNetwork.tenant = tenant
 	deleteNetwork.action = blob[0]
-	deleteNetwork.nextRow = index + 1 + 16 + 5
 	ip := net.IP(blob[index+1+16 : index+1+16+4])
 	maskSize := int(blob[index+1+16+4])
 	mask := net.CIDRMask(maskSize, 32)
@@ -53,6 +50,6 @@ func (deleteNetwork *DeleteNetwork) Row() []byte {
 	return res
 }
 
-func (deleteNetwork *DeleteNetwork) GetNextRow() uint64 {
-	return deleteNetwork.nextRow
+func (deleteNetwork *DeleteNetwork) GetRowSize() int {
+	return 1 + 16 + 5
 }

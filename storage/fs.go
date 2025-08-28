@@ -45,18 +45,13 @@ func WriteFileChunk(path string, byteIndex int64, chunk io.Reader) error {
 	return nil
 }
 
-func ReadFileChunk(path string, byteIndex int64, len int) ([]byte, error) {
+func ReadFileChunk(path string, buffer []byte, offset int64) (int, error) {
 	fd, err := os.OpenFile(path, os.O_RDONLY|os.O_CREATE, os.ModePerm)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	defer fd.Close()
-	blob := make([]byte, len)
-	n, err := fd.ReadAt(blob, byteIndex)
-	if err != nil {
-		return nil, err
-	}
-	return blob[:n], nil
+	return fd.ReadAt(buffer, offset)
 }
 
 func RenameFile(oldPath string, newPath string) error {

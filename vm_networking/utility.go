@@ -63,3 +63,7 @@ func ParseCIDR4(ipStr string, maskStr string) (net.IP, *net.IPNet, error) {
 	ones, _ := mask.Size()
 	return net.ParseCIDR(fmt.Sprintf("%s/%s", ip.To4().String(), strconv.Itoa(ones)))
 }
+
+func NetworkToCIDR(network net.IPNet) (string, error) {
+	return "", nil
+}

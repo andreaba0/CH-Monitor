@@ -1,9 +1,8 @@
 package networkvpc
 
 import (
-	"encoding/binary"
-	"errors"
 	"net"
+	vmnetworking "vmm/vm_networking"
 
 	"github.com/google/uuid"
 )
@@ -12,11 +11,10 @@ type AddNetwork struct {
 	action  byte
 	tenant  uuid.UUID
 	network net.IPNet
-	bridge  uint32
-	nextRow uint64
+	bridge  string
 }
 
-func NewAddNetwork(tenant uuid.UUID, network net.IPNet, bridge uint32) *AddNetwork {
+func NewAddNetwork(tenant uuid.UUID, network net.IPNet, bridge string) *AddNetwork {
 	return &AddNetwork{
 		action:  ADD_NETWORK,
 		tenant:  tenant,
@@ -25,9 +23,9 @@ func NewAddNetwork(tenant uuid.UUID, network net.IPNet, bridge uint32) *AddNetwo
 	}
 }
 
-func (addNetwork *AddNetwork) Parse(blob []byte, index uint64) error {
-	if uint64(len(blob)) < index+1+16+5+4 {
-		return errors.New("not enough bytes")
+func (addNetwork *AddNetwork) Parse(blob []byte, index int) error {
+	if len(blob) < index+1+16+5+4 {
+		return &ErrNotEnoughBytes{}
 	}
 	tenant, err := uuid.ParseBytes(blob[index+1 : index+1+16])
 	if err != nil {
@@ -35,8 +33,7 @@ func (addNetwork *AddNetwork) Parse(blob []byte, index uint64) error {
 	}
 	addNetwork.tenant = tenant
 	addNetwork.action = blob[0]
-	addNetwork.nextRow = index + 1 + 16 + 5 + 4
-	addNetwork.bridge = binary.BigEndian.Uint32(blob[index+1+16+5 : index+1+16+5+4])
+	addNetwork.bridge = string(blob[index+1+16+5 : index+1+16+5+15])
 	ip := net.IP(blob[index+1+16 : index+1+16+4])
 	maskSize := int(blob[index+1+16+4])
 	mask := net.CIDRMask(maskSize, 32)
@@ -54,10 +51,22 @@ func (addNetwork *AddNetwork) Row() []byte {
 	res = append(res, addNetwork.network.IP.To4()...)
 	ones, _ := addNetwork.network.Mask.Size()
 	res = append(res, byte(ones))
-	res = append(res, byte(addNetwork.bridge))
+	res = append(res, []byte(addNetwork.bridge)...)
 	return res
 }
 
-func (addNetwork *AddNetwork) GetNextRow() uint64 {
-	return addNetwork.nextRow
+func (addNetwork *AddNetwork) GetRowSize() int {
+	return 1 + 16 + 5 + 15
+}
+
+func (addNetwork *AddNetwork) GetNetworkString() (string, error) {
+	return vmnetworking.NetworkToCIDR(addNetwork.network)
+}
+
+func (addNetwork *AddNetwork) GetBridgeNumber() string {
+	return addNetwork.bridge
+}
+
+func (addNetwork *AddNetwork) GetTenant() string {
+	return addNetwork.tenant.String()
 }

@@ -3,15 +3,14 @@ package vmm
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"path/filepath"
-	"strconv"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
 	storage "vmm/storage"
 	virtualmachine "vmm/virtual_machine"
 	vmnetworking "vmm/vm_networking"
+	networkvpc "vmm/vm_networking/vpc"
 
 	"go.uber.org/zap"
 )
@@ -22,6 +21,7 @@ type HypervisorMonitor struct {
 	logger            *zap.Logger
 	manifest          *Manifest
 	networkEnumerator *vmnetworking.NetworkEnumerator
+	vpcManager        *networkvpc.VpcManager
 }
 
 func NewHypervisorMonitor(logger *zap.Logger, manifestPath string) (*HypervisorMonitor, error) {
@@ -29,12 +29,19 @@ func NewHypervisorMonitor(logger *zap.Logger, manifestPath string) (*HypervisorM
 	if err != nil {
 		return nil, err
 	}
-	networkEnumerator := vmnetworking.NewNetworkEnumerator(manifest.InternalMetadataPath)
+	enumeratorFilePath := filepath.Join(manifest.InternalConfigFolderPath, "enumerator_config.json")
+	vpcSnapshotFilePath := filepath.Join(manifest.InternalConfigFolderPath, "vpc_config.snapshot")
+	vpcChangesFilePath := filepath.Join(manifest.InternalConfigFolderPath, "vpc_changes.aof")
+	networkEnumerator, err := vmnetworking.NewNetworkEnumerator(enumeratorFilePath)
+	if err != nil {
+		return nil, err
+	}
 	return &HypervisorMonitor{
-		virtualMachines: make(map[string]*virtualmachine.VirtualMachine),
-		logger:          logger,
-		manifest:        &manifest,
-		metadata:        metadataManager,
+		virtualMachines:   make(map[string]*virtualmachine.VirtualMachine),
+		logger:            logger,
+		manifest:          &manifest,
+		networkEnumerator: networkEnumerator,
+		vpcManager:        networkvpc.NewVpcManager(vpcSnapshotFilePath, vpcChangesFilePath),
 	}, nil
 }
 
@@ -68,7 +75,7 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 		if !entry.IsFolder {
 			continue
 		}
-		vm, err := virtualmachine.LoadVirtualMachine(filepath.Join(basePath, entry.Name), hm.logger, hm.manifest.Bridge, hm.metadata)
+		vm, err := virtualmachine.LoadVirtualMachine(filepath.Join(basePath, entry.Name), hm.logger, hm.manifest.Bridge, hm.networkEnumerator)
 		if err != nil {
 			hm.logger.Error("Unable to read manifest from file", zap.String("base_path", basePath), zap.String("vm_id", entry.Name))
 		}
@@ -120,61 +127,27 @@ func (hm *HypervisorMonitor) CreateVirtualMachine(manifest *virtualmachine.Manif
 	hm.vmsMu.Lock()
 	defer hm.vmsMu.Unlock()
 	for i := 0; i < len(manifest.Config.Vpc); i++ {
-		network := manifest.Config.Vpc[i]
-		if len(network.Addresses) < 1 {
+		vpc := manifest.Config.Vpc[i]
+		if len(vpc.Addresses) < 1 {
 			return errors.New("required at least one ip address for a given interface")
 		}
-		ipNet4 := ""
-		ones := 0
-		for j := 1; j < len(network.Addresses); j++ {
-			_, ipNet, err := vmnetworking.ParseCIDR4(network.Addresses[j], network.Mask)
-			ones, _ = ipNet.Mask.Size()
-			if err != nil {
-				return err
-			}
-			if ipNet4 == "" {
-				ipNet4 = ipNet.String()
-				continue
-			}
-			if ipNet.String() != ipNet4 {
-				return errors.New("all ip addresses in an interface must be in the same network")
-			}
+		if len(vpc.Addresses) < 1 {
+			return errors.New("expected at least 1 ip address")
 		}
-		tapName, err := hm.metadata.GetNewTapName()
+		_, ipNet, err := vmnetworking.ParseCIDR4(vpc.Addresses[0], vpc.Mask)
 		if err != nil {
 			return err
 		}
-		manifest.Config.Vpc[i].Tap = tapName
-		vpc := fmt.Sprintf("%s/%s", ipNet4, strconv.Itoa(ones))
-		fmt.Printf("vpc: %s\n", vpc)
-		if _, ok := hm.vpc[vpc]; !ok {
-			hm.vpc[vpc] = make(map[string]string)
+		bridge, err := hm.networkEnumerator.GetNewBridgeName()
+		if err != nil {
+			return err
 		}
-		if v, ok := hm.vpc[vpc][manifest.Tenant.String()]; ok {
-			manifest.Config.Vpc[i].Bridge = v
-		} else {
-			bridge, err := hm.metadata.GetNewBridgeName()
-			if err != nil {
-				return err
-			}
-			hm.vpc[vpc][manifest.Tenant.String()] = bridge
-			manifest.Config.Vpc[i].Bridge = bridge
+		err = hm.vpcManager.AddNetwork(manifest.Tenant, *ipNet, bridge)
+		if err != nil {
+			return err
 		}
+		manifest.Config.Vpc[i].Bridge = bridge
 	}
-	tapName, err := hm.metadata.GetNewTapName()
-	if err != nil {
-		return err
-	}
-	manifest.Config.Network.Tap = tapName
-	vm, err := virtualmachine.NewVirtualMachine(manifest, hm.logger, hm.manifest.Server.StoragePath, hm.manifest.Bridge, hm.metadata)
-	if err != nil {
-		return err
-	}
-	err = vm.StoreManifest()
-	if err != nil {
-		return err
-	}
-	hm.virtualMachines[manifest.GuestIdentifier.String()] = vm
 	return nil
 }
 

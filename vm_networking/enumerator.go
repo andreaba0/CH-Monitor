@@ -32,8 +32,8 @@ func NewNetworkEnumerator(snapshot_path string) (*NetworkEnumerator, error) {
 		return &NetworkEnumerator{
 			tapCounter:    0,
 			bridgeCounter: 0,
-			tapPrefix:     "tapch",
-			bridgePrefix:  "brvpc",
+			tapPrefix:     "tpvm-",
+			bridgePrefix:  "brvm-",
 			snapshot_path: snapshot_path,
 		}, nil
 	}
@@ -56,10 +56,18 @@ func (mm *NetworkEnumerator) MakeSnapshot() error {
 	return mm.doSnapshot()
 }
 
+func (ne *NetworkEnumerator) TapName(number uint32) string {
+	return fmt.Sprintf("%s%s", ne.tapPrefix, strconv.FormatUint(uint64(number), 10))
+}
+
+func (ne *NetworkEnumerator) BridgeName(number uint32) string {
+	return fmt.Sprintf("%s%s", ne.bridgePrefix, strconv.FormatUint(uint64(number), 10))
+}
+
 func (mm *NetworkEnumerator) GetNewTapName() (string, error) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	tapName := fmt.Sprintf("%s%s", mm.tapPrefix, strconv.FormatUint(uint64(mm.tapCounter+1), 10))
+	tapName := mm.TapName(mm.tapCounter + 1)
 	err := mm.doSnapshot()
 	if err != nil {
 		return "", err
@@ -71,7 +79,7 @@ func (mm *NetworkEnumerator) GetNewTapName() (string, error) {
 func (mm *NetworkEnumerator) GetNewBridgeName() (string, error) {
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
-	bridgeName := fmt.Sprintf("%s%s", mm.bridgePrefix, strconv.FormatUint(uint64(mm.bridgeCounter+1), 10))
+	bridgeName := mm.BridgeName(mm.bridgeCounter + 1)
 	err := mm.doSnapshot()
 	if err != nil {
 		return "", err

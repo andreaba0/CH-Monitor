@@ -1,15 +1,12 @@
 package networkvpc
 
 import (
-	"errors"
-
 	"github.com/google/uuid"
 )
 
 type DeleteTenant struct {
-	action  byte
-	tenant  uuid.UUID
-	nextRow uint64
+	action byte
+	tenant uuid.UUID
 }
 
 func NewDeleteTenant(tenant uuid.UUID) *DeleteNetwork {
@@ -19,9 +16,9 @@ func NewDeleteTenant(tenant uuid.UUID) *DeleteNetwork {
 	}
 }
 
-func (deleteTenant *DeleteTenant) Parse(blob []byte, index uint64) error {
-	if uint64(len(blob)) < index+1+16+5+4 {
-		return errors.New("not enough bytes")
+func (deleteTenant *DeleteTenant) Parse(blob []byte, index int) error {
+	if len(blob) < index+1+16+5+4 {
+		return &ErrNotEnoughBytes{}
 	}
 	tenant, err := uuid.ParseBytes(blob[index+1 : index+1+16])
 	if err != nil {
@@ -29,7 +26,6 @@ func (deleteTenant *DeleteTenant) Parse(blob []byte, index uint64) error {
 	}
 	deleteTenant.tenant = tenant
 	deleteTenant.action = blob[0]
-	deleteTenant.nextRow = index + 1 + 16
 	return nil
 }
 
@@ -40,6 +36,6 @@ func (deleteTenant *DeleteTenant) Row() []byte {
 	return res
 }
 
-func (deleteTenant *DeleteTenant) GetNextRow() uint64 {
-	return deleteTenant.nextRow
+func (deleteTenant *DeleteTenant) GetRowSize() int {
+	return 1 + 16
 }

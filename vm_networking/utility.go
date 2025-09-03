@@ -64,8 +64,10 @@ func ParseCIDR4(ipStr string, maskStr string) (net.IP, *net.IPNet, error) {
 	return net.ParseCIDR(fmt.Sprintf("%s/%s", ip.To4().String(), strconv.Itoa(ones)))
 }
 
-func NetworkToCIDR(network net.IPNet) (string, error) {
-	return "", nil
+func NetworkToCIDR4(network net.IPNet) string {
+	networkString := network.IP.To4().String()
+	ones, _ := network.Mask.Size()
+	return fmt.Sprintf("%s/%s", networkString, strconv.Itoa(ones))
 }
 
 func CreateTapDevice(name string, master netlink.Link) error {

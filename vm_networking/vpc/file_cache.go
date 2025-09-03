@@ -1,6 +1,7 @@
 package networkvpc
 
 import (
+	"errors"
 	"io"
 	"os"
 )
@@ -34,7 +35,7 @@ func NewChunkCache(filePath string, bufferSize int) *ChunkCache {
 		filePath: filePath,
 		err:      nil,
 		n:        0,
-		page:     0,
+		page:     -1,
 		buffer:   make([]byte, bufferSize),
 		storage:  new(storageCache),
 	}
@@ -53,10 +54,11 @@ func (cache *ChunkCache) SlideBufferToIndex(index int64) {
 	n, err := cache.storage.ReadFileChunk(cache.filePath, cache.buffer, index)
 	cache.n = n
 	cache.err = err
+	cache.page = cache.getPage(index)
 }
 
 func (cache *ChunkCache) GetBuffered(index int64) []byte {
-	if cache.getPage(index) == cache.page {
+	if cache.page > -1 && cache.getPage(index) == cache.page {
 		return cache.buffer
 	}
 	n, err := cache.storage.ReadFileChunk(cache.filePath, cache.buffer, index)
@@ -70,9 +72,9 @@ func (cache *ChunkCache) BufferAndIndexAreAtEndOfFile(index int64) bool {
 	if cache.getPage(index) < cache.page {
 		return false
 	}
-	return (index%int64(len(cache.buffer))) >= int64(cache.n) && cache.EndFileReached()
+	return index >= int64(cache.n)-1 && cache.EndFileReached()
 }
 
 func (cache *ChunkCache) EndFileReached() bool {
-	return cache.err != nil && (cache.err == io.ErrUnexpectedEOF || cache.err == io.EOF)
+	return cache.err != nil && (errors.Is(cache.err, io.ErrUnexpectedEOF) || errors.Is(cache.err, io.EOF))
 }

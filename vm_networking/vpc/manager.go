@@ -169,11 +169,8 @@ func (vpcManager *VpcManager) getNextRow(buffer []byte, index int64) (BlobData, 
 }
 
 func (vpcManager *VpcManager) addNetwork(an *AddNetwork, store bool) error {
-	network, err := an.GetNetworkString()
-	if err != nil {
-		return err
-	}
-	bridge := an.GetBridgeNumber()
+	network := an.GetNetworkString()
+	bridge := an.GetBridgeName()
 	if _, ok := vpcManager.database[an.GetTenant()]; !ok {
 		vpcManager.database[an.GetTenant()] = make(map[string]string)
 	}

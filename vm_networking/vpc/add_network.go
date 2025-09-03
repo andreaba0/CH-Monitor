@@ -24,10 +24,10 @@ func NewAddNetwork(tenant uuid.UUID, network net.IPNet, bridge string) *AddNetwo
 }
 
 func (addNetwork *AddNetwork) Parse(blob []byte, index int) error {
-	if len(blob) < index+1+16+5+4 {
+	if len(blob) < index+addNetwork.GetRowSize() {
 		return &ErrNotEnoughBytes{}
 	}
-	tenant, err := uuid.ParseBytes(blob[index+1 : index+1+16])
+	tenant, err := uuid.FromBytes(blob[index+1 : index+1+16])
 	if err != nil {
 		return err
 	}
@@ -59,11 +59,11 @@ func (addNetwork *AddNetwork) GetRowSize() int {
 	return 1 + 16 + 5 + 15
 }
 
-func (addNetwork *AddNetwork) GetNetworkString() (string, error) {
-	return vmnetworking.NetworkToCIDR(addNetwork.network)
+func (addNetwork *AddNetwork) GetNetworkString() string {
+	return vmnetworking.NetworkToCIDR4(addNetwork.network)
 }
 
-func (addNetwork *AddNetwork) GetBridgeNumber() string {
+func (addNetwork *AddNetwork) GetBridgeName() string {
 	return addNetwork.bridge
 }
 

@@ -142,6 +142,10 @@ func (vm *VirtualMachine) RequestBoot(binaryPath string, remoteUri string) error
 	if vm.hypervisor != nil {
 		return errors.New("virtual machine is already running")
 	}
+	err := vm.setupNetworking()
+	if err != nil {
+		return errors.New("there was an error connecting vm to network interfaces")
+	}
 	hypervisor, err := cloudhypervisor.NewCloudHypervisor(binaryPath, remoteUri)
 	if err != nil {
 		return err
@@ -154,10 +158,6 @@ func (vm *VirtualMachine) RequestBoot(binaryPath string, remoteUri string) error
 	err = vm.bootVirtualMachine()
 	if err != nil {
 		return err
-	}
-	err = vm.connectNetworking()
-	if err != nil {
-		return errors.New("there was an error connecting vm to network interfaces")
 	}
 	return nil
 }
@@ -242,7 +242,11 @@ func (vm *VirtualMachine) shutdownVirtualMachine() error {
 	return nil
 }
 
-func (vm *VirtualMachine) connectNetworking() error {
+func (vm *VirtualMachine) setupNetworking() error {
+	for i := 0; i < len(vm.manifest.Config.Vpc); i++ {
+		//vpc := vm.manifest.Config.Vpc[i]
+		//bridge := vpc.Bridge
+	}
 	/*for i := 0; i < len(vm.manifest.Config.Networks); i++ {
 		address := vm.manifest.Config.Networks[i]
 		ip, ipNet, err := net.ParseCIDR(address.Address)

@@ -1,10 +1,11 @@
 package networkvpc
 
 import (
+	"encoding/gob"
 	"errors"
 	"net"
+	"os"
 	"sync"
-	storage "vmm/storage"
 
 	"github.com/google/uuid"
 )
@@ -15,6 +16,45 @@ const (
 	DELETE_NETWORK
 	DELETE_TENANT
 )
+
+type storageVpc struct{}
+
+func (s *storageVpc) ReadSnapshot(path string) (map[string]map[string]string, error) {
+	fd, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	var res map[string]map[string]string
+	decoder := gob.NewDecoder(fd)
+	err = decoder.Decode(&res)
+	return res, err
+}
+
+func (s *storageVpc) WriteSnapshot(path string, db map[string]map[string]string) error {
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	encoder := gob.NewEncoder(fd)
+	return encoder.Encode(db)
+}
+
+func (s *storageVpc) CreateFile(path string) error {
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	return nil
+}
+
+type storageVpcService interface {
+	ReadSnapshot(path string) (map[string]map[string]string, error)
+	WriteSnapshot(path string, db map[string]map[string]string) error
+	CreateFile(path string) error
+}
 
 type BlobData interface {
 	Parse(blob []byte, index int) error
@@ -27,6 +67,7 @@ type VpcManager struct {
 	changesPath  string
 	database     map[string]map[string]string
 	mu           sync.Mutex
+	storage      storageVpcService
 }
 
 func NewVpcManager(snapshotPath string, changesPath string) *VpcManager {
@@ -34,6 +75,7 @@ func NewVpcManager(snapshotPath string, changesPath string) *VpcManager {
 		snapshotPath: snapshotPath,
 		changesPath:  changesPath,
 		database:     make(map[string]map[string]string),
+		storage:      new(storageVpc),
 	}
 }
 
@@ -42,7 +84,7 @@ func NewVpcManager(snapshotPath string, changesPath string) *VpcManager {
 func (vpcManager *VpcManager) LoadFromStorage(storagePath string) error {
 	vpcManager.mu.Lock()
 	defer vpcManager.mu.Unlock()
-	db, err := storage.ReadJson[map[string]map[string]string](vpcManager.GetSnapshotFilePath())
+	db, err := vpcManager.storage.ReadSnapshot(vpcManager.GetSnapshotFilePath())
 	if err != nil {
 		return err
 	}
@@ -68,11 +110,11 @@ func (vpcManager *VpcManager) GetSnapshotFilePath() string {
 
 // This method stores the main datastructure in filesystem and clears AOF file
 func (vpcManager *VpcManager) doSnapshot() error {
-	err := storage.WriteJson(vpcManager.GetSnapshotFilePath(), vpcManager.database)
+	err := vpcManager.storage.WriteSnapshot(vpcManager.GetSnapshotFilePath(), vpcManager.database)
 	if err != nil {
 		return err
 	}
-	err = storage.CreateFile(vpcManager.GetLogFilePath())
+	err = vpcManager.storage.CreateFile(vpcManager.GetLogFilePath())
 	if err != nil {
 		return err
 	}

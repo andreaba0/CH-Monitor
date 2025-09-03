@@ -67,3 +67,29 @@ func ParseCIDR4(ipStr string, maskStr string) (net.IP, *net.IPNet, error) {
 func NetworkToCIDR(network net.IPNet) (string, error) {
 	return "", nil
 }
+
+func CreateTapDevice(name string, master netlink.Link) error {
+	err := netlink.LinkAdd(&netlink.Tuntap{
+		Mode: netlink.TUNTAP_MODE_TAP,
+		LinkAttrs: netlink.LinkAttrs{
+			Name:        name,
+			MasterIndex: master.Attrs().Index,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func CreateBridgeDevice(name string) error {
+	err := netlink.LinkAdd(&netlink.Bridge{
+		LinkAttrs: netlink.LinkAttrs{
+			Name: name,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
-	storage "vmm/storage"
 	virtualmachine "vmm/virtual_machine"
 	vmnetworking "vmm/vm_networking"
 	networkvpc "vmm/vm_networking/vpc"
 
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 type HypervisorMonitor struct {
@@ -25,7 +26,12 @@ type HypervisorMonitor struct {
 }
 
 func NewHypervisorMonitor(logger *zap.Logger, manifestPath string) (*HypervisorMonitor, error) {
-	manifest, err := storage.ReadYaml[Manifest](manifestPath)
+	fileBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+	manifest := &Manifest{}
+	err = yaml.Unmarshal(fileBytes, manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +45,7 @@ func NewHypervisorMonitor(logger *zap.Logger, manifestPath string) (*HypervisorM
 	return &HypervisorMonitor{
 		virtualMachines:   make(map[string]*virtualmachine.VirtualMachine),
 		logger:            logger,
-		manifest:          &manifest,
+		manifest:          manifest,
 		networkEnumerator: networkEnumerator,
 		vpcManager:        networkvpc.NewVpcManager(vpcSnapshotFilePath, vpcChangesFilePath),
 	}, nil
@@ -67,17 +73,17 @@ func (hm *HypervisorMonitor) LoadVirtualMachines(basePath string) error {
 	hm.vmsMu.Lock()
 	defer hm.vmsMu.Unlock()
 	var err error
-	entries, err := storage.ListFolder(basePath)
+	entries, err := os.ReadDir(basePath)
 	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsFolder {
+		if !entry.IsDir() {
 			continue
 		}
-		vm, err := virtualmachine.LoadVirtualMachine(filepath.Join(basePath, entry.Name), hm.logger, hm.manifest.Bridge, hm.networkEnumerator)
+		vm, err := virtualmachine.LoadVirtualMachine(filepath.Join(basePath, entry.Name()), hm.logger, hm.manifest.Bridge, hm.networkEnumerator)
 		if err != nil {
-			hm.logger.Error("Unable to read manifest from file", zap.String("base_path", basePath), zap.String("vm_id", entry.Name))
+			hm.logger.Error("Unable to read manifest from file", zap.String("base_path", basePath), zap.String("vm_id", entry.Name()))
 		}
 		guestName := vm.GetManifest().GuestIdentifier
 		hm.virtualMachines[guestName.String()] = vm

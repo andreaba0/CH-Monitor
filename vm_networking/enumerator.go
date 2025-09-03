@@ -1,12 +1,41 @@
 package vmnetworking
 
 import (
+	"encoding/gob"
 	"fmt"
 	"os"
 	"strconv"
 	"sync"
-	vmstorage "vmm/storage"
 )
+
+type storageEnumerator struct{}
+
+func (s *storageEnumerator) ReadSnapshot(path string) (*EnumeratorManifest, error) {
+	fd, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	var res *EnumeratorManifest
+	decoder := gob.NewDecoder(fd)
+	err = decoder.Decode(res)
+	return res, err
+}
+
+func (s *storageEnumerator) WriteSnapshot(path string, manifest *EnumeratorManifest) error {
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	encoder := gob.NewEncoder(fd)
+	return encoder.Encode(manifest)
+}
+
+type storageEnumeratorService interface {
+	ReadSnapshot(path string) (*EnumeratorManifest, error)
+	WriteSnapshot(path string, manifest *EnumeratorManifest) error
+}
 
 type NetworkEnumerator struct {
 	tapCounter    uint32
@@ -15,10 +44,12 @@ type NetworkEnumerator struct {
 	bridgePrefix  string
 	mu            sync.Mutex
 	snapshot_path string
+	storage       storageEnumeratorService
 }
 
 func NewNetworkEnumerator(snapshot_path string) (*NetworkEnumerator, error) {
-	manifest, err := vmstorage.ReadJson[Manifest](snapshot_path)
+	storage := new(storageEnumerator)
+	manifest, err := storage.ReadSnapshot(snapshot_path)
 	if err == nil {
 		return &NetworkEnumerator{
 			tapCounter:    manifest.TapCounter,
@@ -26,6 +57,7 @@ func NewNetworkEnumerator(snapshot_path string) (*NetworkEnumerator, error) {
 			tapPrefix:     manifest.TapPrefix,
 			bridgePrefix:  manifest.BridgePrefix,
 			snapshot_path: snapshot_path,
+			storage:       storage,
 		}, nil
 	}
 	if os.IsNotExist(err) {
@@ -35,19 +67,20 @@ func NewNetworkEnumerator(snapshot_path string) (*NetworkEnumerator, error) {
 			tapPrefix:     "tpvm-",
 			bridgePrefix:  "brvm-",
 			snapshot_path: snapshot_path,
+			storage:       new(storageEnumerator),
 		}, nil
 	}
 	return nil, err
 }
 
 func (mm *NetworkEnumerator) doSnapshot() error {
-	manifest := Manifest{
+	manifest := EnumeratorManifest{
 		TapCounter:    mm.tapCounter,
 		BridgeCounter: mm.bridgeCounter,
 		TapPrefix:     mm.tapPrefix,
 		BridgePrefix:  mm.bridgePrefix,
 	}
-	return vmstorage.WriteJson(mm.snapshot_path, &manifest)
+	return mm.storage.WriteSnapshot(mm.snapshot_path, &manifest)
 }
 
 func (mm *NetworkEnumerator) MakeSnapshot() error {

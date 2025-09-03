@@ -11,13 +11,14 @@ type Manifest struct {
 }
 
 type Config struct {
-	Network Net      `json:"networks" yaml:"networks"`
-	Disks   []Disk   `json:"disks" yaml:"disks"`
-	Kernel  string   `json:"kernel" yaml:"kernel"`
-	Init    string   `json:"init" yaml:"init"`
-	Vpc     []VpcNet `json:"vpc" yaml:"vpc"`
-	Rng     Rng      `json:"rng" yaml:"rng"`
-	Cpus    int      `json:"cpus" yaml:"cpus"`
+	Network   Net      `json:"networks" yaml:"networks"`
+	Disks     []Disk   `json:"disks" yaml:"disks"`
+	Kernel    string   `json:"kernel" yaml:"kernel"`
+	Init      string   `json:"init" yaml:"init"`
+	Initramfs string   `json:"initramfs" yaml:"initramfs"`
+	Vpc       []VpcNet `json:"vpc" yaml:"vpc"`
+	Rng       Rng      `json:"rng" yaml:"rng"`
+	Cpus      int      `json:"cpus" yaml:"cpus"`
 }
 
 type Rng struct {

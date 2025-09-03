@@ -1,8 +1,8 @@
 package vmm
 
 import (
-	"errors"
-	vmstorage "vmm/storage"
+	"encoding/json"
+	"os"
 )
 
 type Manifest struct {
@@ -18,12 +18,15 @@ type Server struct {
 }
 
 func LoadManifest(path string) (*Manifest, error) {
-	var manifest *Manifest
-	var err error
+	manifest := &Manifest{}
 
-	manifest, err = vmstorage.ReadJson[*Manifest](path)
+	fileByte, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errors.New("unable to read manifest file")
+		return nil, err
+	}
+	err = json.Unmarshal(fileByte, manifest)
+	if err != nil {
+		return nil, err
 	}
 	return manifest, nil
 }

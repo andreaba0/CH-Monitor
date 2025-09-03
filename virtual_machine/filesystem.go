@@ -1,12 +1,13 @@
 package virtualmachine
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
-	"vmm/storage"
 	"vmm/utils"
 
 	"go.uber.org/zap"
@@ -38,7 +39,12 @@ func (fs *FileSystemWrapper) GetDiskStoragePath() string {
 }
 
 func (fs *FileSystemWrapper) ReadManifest() (*Manifest, error) {
-	manifest, err := storage.ReadJson[*Manifest](fs.GetManifestPath())
+	fileBytes, err := os.ReadFile(fs.GetManifestPath())
+	if err != nil {
+		return nil, err
+	}
+	var manifest *Manifest
+	err = json.Unmarshal(fileBytes, &manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -46,20 +52,32 @@ func (fs *FileSystemWrapper) ReadManifest() (*Manifest, error) {
 }
 
 func (fs *FileSystemWrapper) StoreManifest(manifest *Manifest) error {
-	var err error = storage.CreateFolderRec(fs.basePath)
+	var err error = fs.createFolderRecursively(fs.basePath)
 	if err != nil {
 		return err
 	}
-	err = storage.CreateFileIfNotExists(fs.GetManifestPath())
+	err = fs.createFile(fs.GetManifestPath())
 	if err != nil {
 		return err
 	}
-	err = storage.WriteJson(fs.GetManifestPath(), manifest)
-	return err
+	content, err := json.Marshal(manifest)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(fs.GetManifestPath(), content, os.ModePerm)
 }
 
-func (fs *FileSystemWrapper) createFile(storagePath string, fileName string) (string, error) {
-	var err error = storage.CreateFolderRec(storagePath)
+func (fs *FileSystemWrapper) createFile(path string) error {
+	fd, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	return nil
+}
+
+func (fs *FileSystemWrapper) createTempFile(storagePath string, fileName string) (string, error) {
+	var err error = fs.createFolderRecursively(storagePath)
 	if err != nil {
 		return "", err
 	}
@@ -70,23 +88,37 @@ func (fs *FileSystemWrapper) createFile(storagePath string, fileName string) (st
 	}
 
 	var tmpFileName string = fmt.Sprintf("%s_%s.tmp", randomString, fileName)
-	err = storage.CreateFile(filepath.Join(storagePath, tmpFileName))
+	err = fs.createFile(filepath.Join(storagePath, tmpFileName))
 	if err != nil {
 		return "", err
 	}
 	return tmpFileName, nil
 }
 
+func (fs *FileSystemWrapper) createFolderRecursively(folderPath string) error {
+	return os.MkdirAll(folderPath, os.ModePerm)
+}
+
 func (fs *FileSystemWrapper) CreateDisk(diskName string) (string, error) {
-	return fs.createFile(fs.GetDiskStoragePath(), diskName)
+	return fs.createTempFile(fs.GetDiskStoragePath(), diskName)
 }
 
 func (fs *FileSystemWrapper) CreateKernel(kernelName string) (string, error) {
-	return fs.createFile(fs.GetKernelStoragePath(), kernelName)
+	return fs.createTempFile(fs.GetKernelStoragePath(), kernelName)
 }
 
 func (fs *FileSystemWrapper) writeChunk(fileFullPath string, byteIndex int64, chunk io.Reader) error {
-	return storage.WriteFileChunk(fileFullPath, byteIndex, chunk)
+	fd, err := os.OpenFile(fileFullPath, os.O_WRONLY, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	defer fd.Close()
+	_, err = fd.Seek(byteIndex, 0)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(fd, chunk)
+	return err
 }
 
 func (fs *FileSystemWrapper) WriteDiskChunk(tmpDiskName string, byteIndex int64, chunk io.Reader) error {
@@ -98,16 +130,11 @@ func (fs *FileSystemWrapper) WriteKernelChunk(tmpKernelName string, byteIndex in
 }
 
 func (fs *FileSystemWrapper) commitOperation(storagePath string, tmpFileName string, fileName string) error {
-	var err error = storage.CreateFolderRec(storagePath)
-	if err != nil {
-		return err
-	}
 	var randomString string = strings.Split(tmpFileName, "_")[0]
 	if fmt.Sprintf("%s_%s.tmp", randomString, fileName) != tmpFileName {
 		return errors.New("disk name and temporary disk name do not match")
 	}
-	err = storage.RenameFile(filepath.Join(storagePath, tmpFileName), filepath.Join(storagePath, fileName))
-	return err
+	return os.Rename(filepath.Join(storagePath, tmpFileName), filepath.Join(storagePath, fileName))
 }
 
 func (fs *FileSystemWrapper) CommitDisk(tmpDiskName string, diskName string) error {

@@ -17,10 +17,10 @@ func NewDeleteTenant(tenant uuid.UUID) *DeleteNetwork {
 }
 
 func (deleteTenant *DeleteTenant) Parse(blob []byte, index int) error {
-	if len(blob) < index+1+16+5+4 {
+	if len(blob) < deleteTenant.GetRowSize() {
 		return &ErrNotEnoughBytes{}
 	}
-	tenant, err := uuid.ParseBytes(blob[index+1 : index+1+16])
+	tenant, err := uuid.FromBytes(blob[index+1 : index+1+16])
 	if err != nil {
 		return err
 	}
@@ -38,4 +38,8 @@ func (deleteTenant *DeleteTenant) Row() []byte {
 
 func (deleteTenant *DeleteTenant) GetRowSize() int {
 	return 1 + 16
+}
+
+func (deleteTenant *DeleteTenant) GetTenant() string {
+	return deleteTenant.tenant.String()
 }

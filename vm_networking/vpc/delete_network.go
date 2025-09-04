@@ -2,6 +2,7 @@ package networkvpc
 
 import (
 	"net"
+	vmnetworking "vmm/vm_networking"
 
 	"github.com/google/uuid"
 )
@@ -21,10 +22,10 @@ func NewDeleteNetwork(tenant uuid.UUID, network net.IPNet) *DeleteNetwork {
 }
 
 func (deleteNetwork *DeleteNetwork) Parse(blob []byte, index int) error {
-	if len(blob) < index+1+16+5 {
+	if len(blob) < deleteNetwork.GetRowSize() {
 		return &ErrNotEnoughBytes{}
 	}
-	tenant, err := uuid.ParseBytes(blob[index+1 : index+1+16])
+	tenant, err := uuid.FromBytes(blob[index+1 : index+1+16])
 	if err != nil {
 		return err
 	}
@@ -52,4 +53,12 @@ func (deleteNetwork *DeleteNetwork) Row() []byte {
 
 func (deleteNetwork *DeleteNetwork) GetRowSize() int {
 	return 1 + 16 + 5
+}
+
+func (deleteNetwork *DeleteNetwork) GetNetworkString() string {
+	return vmnetworking.NetworkToCIDR4(deleteNetwork.network)
+}
+
+func (deleteNetwork *DeleteNetwork) GetTenant() string {
+	return deleteNetwork.tenant.String()
 }

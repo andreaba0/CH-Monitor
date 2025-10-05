@@ -1,59 +1,48 @@
 package networkvpc
 
 import (
-	"encoding/gob"
 	"errors"
 	"net"
-	"os"
 	"sync"
+	"vmm/utils"
 
 	"github.com/google/uuid"
 )
 
 const (
-	EOF = iota
-	ADD_NETWORK
+	ADD_NETWORK = iota
 	DELETE_NETWORK
 	DELETE_TENANT
 )
 
-type storageVpc struct{}
+type VpcWalStorage struct{}
 
-func (s *storageVpc) ReadSnapshot(path string) (map[string]map[string]string, error) {
-	fd, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer fd.Close()
-	var res map[string]map[string]string
-	decoder := gob.NewDecoder(fd)
-	err = decoder.Decode(&res)
-	return res, err
+func (s *VpcWalStorage) ReadSnapshot(path string) (map[string]map[string]string, error) {
+	return utils.ReadGobFile[map[string]map[string]string](path)
 }
 
-func (s *storageVpc) WriteSnapshot(path string, db map[string]map[string]string) error {
-	fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-	encoder := gob.NewEncoder(fd)
-	return encoder.Encode(db)
+func (s *VpcWalStorage) WriteSnapshot(path string, db map[string]map[string]string) error {
+	return utils.WriteGobFile(path, db)
 }
 
-func (s *storageVpc) CreateFile(path string) error {
-	fd, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-	return nil
+func (s *VpcWalStorage) CreateFile(path string) error {
+	return utils.CreateFile(path)
 }
 
-type storageVpcService interface {
+func (s *VpcWalStorage) AppendRow(path string, row []byte) (int, error) {
+	return utils.AppendOrCreateToFile(path, row)
+}
+
+func (s *VpcWalStorage) ReadChunk(path string, buffer []byte, index int64) (int, error) {
+	return utils.ReadChunkFromFile(path, buffer, index)
+}
+
+type VpcWalStorageRepository interface {
 	ReadSnapshot(path string) (map[string]map[string]string, error)
 	WriteSnapshot(path string, db map[string]map[string]string) error
 	CreateFile(path string) error
+	AppendRow(path string, row []byte) (int, error)
+	ReadChunk(path string, buffer []byte, index int64) (int, error)
 }
 
 type BlobData interface {
@@ -67,7 +56,7 @@ type VpcManager struct {
 	changesPath  string
 	database     map[string]map[string]string
 	mu           sync.Mutex
-	storage      storageVpcService
+	storage      VpcWalStorageRepository
 }
 
 func NewVpcManager(snapshotPath string, changesPath string) *VpcManager {
@@ -75,7 +64,7 @@ func NewVpcManager(snapshotPath string, changesPath string) *VpcManager {
 		snapshotPath: snapshotPath,
 		changesPath:  changesPath,
 		database:     make(map[string]map[string]string),
-		storage:      new(storageVpc),
+		storage:      new(VpcWalStorage),
 	}
 }
 
@@ -121,37 +110,9 @@ func (vpcManager *VpcManager) doSnapshot() error {
 	return nil
 }
 
-func (vpcManager *VpcManager) readChangesFile() error {
-	var index int64 = 0
-	cache := NewChunkCache(vpcManager.GetLogFilePath(), 512)
-	for {
-		buffer := cache.GetBuffered(index)
-		if cache.BufferAndIndexAreAtEndOfFile(index) {
-			break
-		}
-		data, err := vpcManager.getNextRow(buffer, index)
-		if err != nil {
-			if errors.Is(err, &ErrNotEnoughBytes{}) {
-				cache.SlideBufferToIndex(index)
-				continue
-			} else {
-				return err
-			}
-		}
-		index += int64(data.GetRowSize())
-		if obj, ok := data.(*AddNetwork); ok {
-			vpcManager.addNetwork(obj, false)
-			continue
-		}
-		return errors.New("unknow data type found")
-	}
-	return nil
-}
-
-func (vpcManager *VpcManager) getNextRow(buffer []byte, index int64) (BlobData, error) {
-	localIndex := index % int64(len(buffer))
+func (VpcManager *VpcManager) processBuffer(index int, buffer []byte) (BlobData, error) {
 	var data BlobData
-	switch buffer[localIndex] {
+	switch buffer[index] {
 	case ADD_NETWORK:
 		data = new(AddNetwork)
 	case DELETE_NETWORK:
@@ -161,11 +122,51 @@ func (vpcManager *VpcManager) getNextRow(buffer []byte, index int64) (BlobData, 
 	default:
 		return nil, errors.New("unknow data type")
 	}
-	err := data.Parse(buffer, int(localIndex))
+	err := data.Parse(buffer, index)
 	if err != nil {
 		return nil, err
 	}
 	return data, nil
+}
+
+func (vpcManager *VpcManager) readChangesFile() error {
+	var index int64 = 0
+	var err error
+	var buffer []byte = make([]byte, 2048)
+	for {
+		n, err := vpcManager.storage.ReadChunk(vpcManager.changesPath, buffer, index)
+		if err != nil {
+			break
+		}
+		if n == 0 {
+			break
+		}
+		var localIndex int = 0
+		for {
+			data, err := vpcManager.processBuffer(localIndex, buffer)
+			if err != nil {
+				index += int64(localIndex)
+				break
+			}
+			localIndex += data.GetRowSize()
+			if obj, ok := data.(*AddNetwork); ok {
+				vpcManager.addNetwork(obj, false)
+				continue
+			}
+			if obj, ok := data.(*DeleteNetwork); ok {
+				vpcManager.deleteNetwork(obj, false)
+				continue
+			}
+			if obj, ok := data.(*DeleteTenant); ok {
+				vpcManager.deleteTenant(obj, false)
+				continue
+			}
+		}
+		if !errors.Is(err, &ErrNotEnoughBytes{}) {
+			break
+		}
+	}
+	return err
 }
 
 func (vpcManager *VpcManager) addNetwork(an *AddNetwork, store bool) error {
@@ -181,24 +182,53 @@ func (vpcManager *VpcManager) addNetwork(an *AddNetwork, store bool) error {
 	} else {
 		vpcManager.database[an.GetTenant()][network] = bridge
 	}
-	if store == true {
-		_ = an.Row()
+	var err error = nil
+	if store {
+		_, err = vpcManager.storage.AppendRow(vpcManager.changesPath, an.Row())
 	}
-	return nil
+	return err
 }
 
 func (vpcManager *VpcManager) deleteNetwork(dn *DeleteNetwork, store bool) error {
-	return nil
+	network := dn.GetNetworkString()
+	tenant := dn.GetTenant()
+	if _, ok := vpcManager.database[tenant]; ok {
+		delete(vpcManager.database[tenant], network)
+	}
+	var err error = nil
+	if store {
+		_, err = vpcManager.storage.AppendRow(vpcManager.changesPath, dn.Row())
+	}
+	return err
 }
 
 func (vpcManager *VpcManager) deleteTenant(dt *DeleteTenant, store bool) error {
-	return nil
+	tenant := dt.GetTenant()
+	delete(vpcManager.database, tenant)
+	var err error = nil
+	if store {
+		_, err = vpcManager.storage.AppendRow(vpcManager.changesPath, dt.Row())
+	}
+	return err
 }
 
 func (vpcManager *VpcManager) AddNetwork(tenant uuid.UUID, network net.IPNet, bridge string) error {
 	vpcManager.mu.Lock()
 	defer vpcManager.mu.Unlock()
 	addNetwork := NewAddNetwork(tenant, network, bridge)
-	err := vpcManager.addNetwork(addNetwork, true)
-	return err
+	return vpcManager.addNetwork(addNetwork, true)
+}
+
+func (vpcManager *VpcManager) DeleteNetwork(tenant uuid.UUID, network net.IPNet) error {
+	vpcManager.mu.Lock()
+	defer vpcManager.mu.Unlock()
+	deleteNetwork := NewDeleteNetwork(tenant, network)
+	return vpcManager.deleteNetwork(deleteNetwork, true)
+}
+
+func (vpcManager *VpcManager) DeleteTenant(tenant uuid.UUID) error {
+	vpcManager.mu.Lock()
+	defer vpcManager.mu.Unlock()
+	deleteTenant := NewDeleteTenant(tenant)
+	return vpcManager.deleteTenant(deleteTenant, true)
 }

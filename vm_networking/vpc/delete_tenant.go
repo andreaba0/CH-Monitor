@@ -9,8 +9,8 @@ type DeleteTenant struct {
 	tenant uuid.UUID
 }
 
-func NewDeleteTenant(tenant uuid.UUID) *DeleteNetwork {
-	return &DeleteNetwork{
+func NewDeleteTenant(tenant uuid.UUID) *DeleteTenant {
+	return &DeleteTenant{
 		action: DELETE_TENANT,
 		tenant: tenant,
 	}

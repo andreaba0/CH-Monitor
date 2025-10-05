@@ -11,6 +11,8 @@ type Manifest struct {
 	HypervisorPath           string `json:"hypervisor_path" yaml:"hypervisor_path"`
 	HypervisorSocketUri      string `json:"socket_uri" yaml:"socket_uri"`
 	InternalConfigFolderPath string `json:"config_folder_path" yaml:"config_folder_path"`
+	CpuOvercommitFactor      float32
+	MemoryOvercommitFactor   float32
 }
 
 type Server struct {

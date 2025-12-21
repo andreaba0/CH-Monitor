@@ -21,7 +21,7 @@ type CloudHypervisor struct {
 }
 
 func waitSocketFileCreation(socket string) error {
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		_, err := os.Stat(socket)
 		if err != nil && os.IsNotExist(err) {
 			time.Sleep(time.Millisecond * 100)

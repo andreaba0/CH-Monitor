@@ -23,20 +23,10 @@ func (s *EnumeratorWalStorage) CreateFile(path string) error {
 	return utils.CreateFile(path)
 }
 
-func (s *EnumeratorWalStorage) AppendRow(path string, row []byte) (int, error) {
-	return utils.AppendOrCreateToFile(path, row)
-}
-
-func (s *EnumeratorWalStorage) ReadChunk(path string, buffer []byte, index int64) (int, error) {
-	return utils.ReadChunkFromFile(path, buffer, index)
-}
-
 type EnumeratorWalStorageRepository interface {
 	ReadSnapshot(path string) (*EnumeratorManifest, error)
 	WriteSnapshot(path string, db *EnumeratorManifest) error
 	CreateFile(path string) error
-	AppendRow(path string, row []byte) (int, error)
-	ReadChunk(path string, buffer []byte, index int64) (int, error)
 }
 
 type NetworkEnumerator struct {

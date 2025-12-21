@@ -27,7 +27,7 @@ func LoadManifest(path string) (*Manifest, error) {
 		return nil, err
 	}
 	err = json.Unmarshal(fileByte, manifest)
-	if err != nil {
+	if err != nil { 
 		return nil, err
 	}
 	return manifest, nil

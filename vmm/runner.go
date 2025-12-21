@@ -9,7 +9,8 @@ import (
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
 	virtualmachine "vmm/virtual_machine"
-	vmnetworking "vmm/vm_networking"
+	vmnetwork_utility "vmm/vm_networking"
+	vmnetworking "vmm/vm_networking/interface_enumerator"
 	networkvpc "vmm/vm_networking/vpc"
 
 	"go.uber.org/zap"
@@ -52,6 +53,7 @@ func NewHypervisorMonitor(logger *zap.Logger, manifestPath string) (*HypervisorM
 }
 
 func (hm *HypervisorMonitor) MonitorSetup(manifestPath string, vmm *HypervisorMonitor) error {
+	hm.logger.Info("")
 	var hypervisorBinary cloudhypervisor.HypervisorRestServer = *cloudhypervisor.NewHypervisorRestServer(hm.manifest.HypervisorSocketUri)
 	err := vmm.LoadVirtualMachines(hm.manifest.Server.StoragePath)
 	if err != nil {
@@ -140,11 +142,11 @@ func (hm *HypervisorMonitor) CreateVirtualMachine(manifest *virtualmachine.Manif
 		if len(vpc.Addresses) < 1 {
 			return errors.New("expected at least 1 ip address")
 		}
-		_, ipNet, err := vmnetworking.ParseCIDR4(vpc.Addresses[0], vpc.Mask)
+		_, ipNet, err := vmnetwork_utility.ParseCIDR4(vpc.Addresses[0], vpc.Mask)
 		if err != nil {
 			return err
 		}
-		bridge, err := hm.networkEnumerator.GetNewBridgeName()
+		bridge, err := hm.networkEnumerator.GenerateBridgeName()
 		if err != nil {
 			return err
 		}

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	cloudhypervisor "vmm/cloud_hypervisor"
-	vmnetworking "vmm/vm_networking"
+	vmnetworking_enumerator "vmm/vm_networking/interface_enumerator"
 
 	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
@@ -22,11 +22,11 @@ type VirtualMachine struct {
 	storage           *FileSystemWrapper
 	logger            *zap.Logger
 	mu                sync.Mutex
-	networkEnumerator *vmnetworking.NetworkEnumerator
+	networkEnumerator *vmnetworking_enumerator.NetworkEnumerator
 	defaultBridge     netlink.Link
 }
 
-func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, storagePath string, defaultBridge string, networkEnumerator *vmnetworking.NetworkEnumerator) (*VirtualMachine, error) {
+func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, storagePath string, defaultBridge string, networkEnumerator *vmnetworking_enumerator.NetworkEnumerator) (*VirtualMachine, error) {
 	bridgeLink, err := netlink.LinkByName(defaultBridge)
 	if err != nil {
 		return nil, err
@@ -45,7 +45,7 @@ func NewVirtualMachine(manifest *Manifest, logger *zap.Logger, storagePath strin
 
 }
 
-func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge string, networkEnumerator *vmnetworking.NetworkEnumerator) (*VirtualMachine, error) {
+func LoadVirtualMachine(vmFolder string, logger *zap.Logger, defaultBridge string, networkEnumerator *vmnetworking_enumerator.NetworkEnumerator) (*VirtualMachine, error) {
 	bridgeLink, err := netlink.LinkByName(defaultBridge)
 	if err != nil {
 		return nil, err

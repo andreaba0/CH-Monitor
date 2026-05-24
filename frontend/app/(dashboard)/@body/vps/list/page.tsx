@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Plus } from "lucide-react";
 import Link from "next/link";
 
 const vms = [
@@ -176,13 +176,24 @@ export default async function DashboardPage() {
 
     return (
         <div className="p-6 pt-16 md:pt-6">
-            <div className="mb-6">
-                <h1 className="text-xl text-[#e6edf3] mb-1">
-                    Virtual Machines
-                </h1>
-                <p className="text-[#8b949e] text-xs">
-                    Manage and monitor your VM instances
-                </p>
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h1 className="text-xl text-[#e6edf3] mb-1">
+                        Virtual Machines
+                    </h1>
+                    <p className="text-[#8b949e] text-xs">
+                        Manage and monitor your VM instances
+                    </p>
+                </div>
+                <button className="px-4 py-2 rounded transition-colors bg-blue-600 hover:bg-blue-700">
+                    <Link
+                        href="/vps/create"
+                        className="text-sm flex items-center gap-2 text-white"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Create VPS
+                    </Link>
+                </button>
             </div>
 
             <div>

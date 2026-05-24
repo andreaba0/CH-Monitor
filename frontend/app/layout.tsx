@@ -14,11 +14,9 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-    menu,
-    body,
+    children,
 }: Readonly<{
-    menu: React.ReactNode;
-    body: React.ReactNode;
+    children: React.ReactNode;
 }>) {
     return (
         <html
@@ -26,12 +24,8 @@ export default function RootLayout({
             className={`${jetbrainsMono.variable} h-full antialiased`}
         >
             <body>
-                <div className="min-h-screen bg-[#0d1117] flex">
-                    <Toaster position="top-right" />
-                    {menu}
-                    {/* Main Content */}
-                    {body}
-                </div>
+                <Toaster position="top-right" />
+                {children}
             </body>
         </html>
     );
